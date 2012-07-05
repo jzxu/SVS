@@ -3,6 +3,10 @@
 
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 class ipcsocket {
 public:
 	ipcsocket();
@@ -16,7 +20,13 @@ public:
 	void disconnect();
 	
 private:
+#ifndef _WIN32
 	int fd;
+#else
+	HANDLE pipe;
+	const char* pipename;
+#endif
+	
 	bool conn;
 };
 

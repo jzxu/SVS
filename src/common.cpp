@@ -1,7 +1,11 @@
 #include <iostream>
 #include <iomanip>
 #include <stdlib.h>
+
+#ifndef _WIN32
 #include <unistd.h>
+#endif
+
 #include <string>
 #include <vector>
 #include <limits>

@@ -3,6 +3,10 @@
 #include "drawer.h"
 #include "common.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace std;
 
 void write_shape_string(const sgnode *n, ostream &os) {
@@ -20,7 +24,15 @@ void write_shape_string(const sgnode *n, ostream &os) {
 drawer::drawer() {
 	string path = get_option("display");
 	if (path.empty()) {
+#ifndef _WIN32
 		path = "/tmp/viewer";
+#else
+		char* temp_string = new char[MAX_PATH+1];
+		GetTempPath(MAX_PATH+1, temp_string);
+		path = temp_string;
+		path += "viewer";
+		delete temp_string;
+#endif
 	}
 	sock.connect(path);
 	if (sock.connected()) {

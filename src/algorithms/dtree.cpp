@@ -8,6 +8,13 @@
 #include "dtree.h"
 #include "common.h"
 
+#ifdef _WIN32
+#ifndef NAN
+static const unsigned long __nan[2] = {0xffffffff, 0x7fffffff};
+#define NAN (*(const float *) __nan)
+#endif
+#endif
+
 using namespace std;
 
 double entropy(const map<category, int> &counts, int total) {
@@ -16,7 +23,7 @@ double entropy(const map<category, int> &counts, int total) {
 	for (i = counts.begin(); i != counts.end(); ++i) {
 		if (i->second > 0) {
 			double p = ((double) i->second) / total;
-			ent -= p * log2(p);
+			ent -= p * log(p)/log((double)2);
 		}
 	}
 	return ent;

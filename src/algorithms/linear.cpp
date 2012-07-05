@@ -6,6 +6,10 @@
 #include "common.h"
 #include "params.h"
 
+#ifdef _WIN32
+#define nextafter _nextafter
+#endif
+
 using namespace std;
 using namespace Eigen;
 

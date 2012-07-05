@@ -525,7 +525,7 @@ public:
 			io_map[input->get_current(i)] = v;
 		}
 		for (int i = 0; i < input->num_removed(); ++i) {
-			typename io_map_t::iterator r = io_map.find(input->get_removed(i));
+			io_map_t::iterator r = io_map.find(input->get_removed(i));
 			assert(r != io_map.end());
 			result_removed(r->second);
 			remove_result(r->second);
@@ -570,7 +570,7 @@ private:
  have to work with filter_val* directly. Assumes that the filter only
  returns one type of result.
 */
-template <class T>
+template <typename T>
 class typed_map_filter : public map_filter {
 public:
 	typed_map_filter(filter_input *input) : map_filter(input) {}

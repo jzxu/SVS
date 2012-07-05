@@ -1,7 +1,9 @@
+#ifndef _WIN32
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <unistd.h>
+#endif
 
 #include <cmath>
 #include <iostream>
@@ -1186,13 +1188,17 @@ public:
 			return;
 		}
 		int fd = fileno(f);
+#ifndef _WIN32
 		flock(fd, LOCK_EX);
+#endif
 		double x;
 		int i = 0;
 		while (fread(&x, sizeof(x), 1, f) > 0 && i < output.size()) {
 			output(i++) = x;
 		}
+#ifndef _WIN32
 		flock(fd, LOCK_UN);
+#endif
 		fclose(f);
 		if (i != output.size()) {
 			error = "incorrect number of output fields";

@@ -32,6 +32,26 @@ std::ofstream& get_datavis();
 #define DATAVIS(x)
 #endif
 
+#ifdef _WIN32
+#define INFINITY 0xffffffff
+
+#include <io.h>
+
+const int W_OK = 2;
+const int R_OK = 4;
+
+#define access _access
+
+#ifdef min
+#undef min
+#endif
+
+#ifdef max
+#undef max
+#endif
+
+#endif
+
 class timer_set;
 
 class timer {
@@ -406,6 +426,10 @@ inline void randomize_vec(rvec &v, const rvec &min, const rvec &max) {
 		v(i) = min(i) + (rand() / (double) RAND_MAX) * (max(i) - min(i));
 	}
 }
+
+#ifdef _WIN32
+#undef ERROR
+#endif
 
 enum log_type {
 	WARN,
