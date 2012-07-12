@@ -25,6 +25,8 @@
 #ifndef EIGEN_SPARSETRIANGULARSOLVER_H
 #define EIGEN_SPARSETRIANGULARSOLVER_H
 
+namespace Eigen { 
+
 namespace internal {
 
 template<typename Lhs, typename Rhs, int Mode,
@@ -48,7 +50,7 @@ struct sparse_solve_triangular_selector<Lhs,Rhs,Mode,Lower,RowMajor>
       for(int i=0; i<lhs.rows(); ++i)
       {
         Scalar tmp = other.coeff(i,col);
-        Scalar lastVal = 0;
+        Scalar lastVal(0);
         int lastIndex = 0;
         for(typename Lhs::InnerIterator it(lhs, i); it; ++it)
         {
@@ -156,6 +158,7 @@ struct sparse_solve_triangular_selector<Lhs,Rhs,Mode,Upper,ColMajor>
         {
           if(!(Mode & UnitDiag))
           {
+            // TODO replace this by a binary search. make sure the binary search is safe for partially sorted elements
             typename Lhs::ReverseInnerIterator it(lhs, i);
             while(it && it.index()!=i)
               --it;
@@ -177,10 +180,8 @@ template<typename ExpressionType,int Mode>
 template<typename OtherDerived>
 void SparseTriangularView<ExpressionType,Mode>::solveInPlace(MatrixBase<OtherDerived>& other) const
 {
-  eigen_assert(m_matrix.cols() == m_matrix.rows());
-  eigen_assert(m_matrix.cols() == other.rows());
-  eigen_assert(!(Mode & ZeroDiag));
-  eigen_assert(Mode & (Upper|Lower));
+  eigen_assert(m_matrix.cols() == m_matrix.rows() && m_matrix.cols() == other.rows());
+  eigen_assert((!(Mode & ZeroDiag)) && bool(Mode & (Upper|Lower)));
 
   enum { copy = internal::traits<OtherDerived>::Flags & RowMajorBit };
 
@@ -304,10 +305,8 @@ template<typename ExpressionType,int Mode>
 template<typename OtherDerived>
 void SparseTriangularView<ExpressionType,Mode>::solveInPlace(SparseMatrixBase<OtherDerived>& other) const
 {
-  eigen_assert(m_matrix.cols() == m_matrix.rows());
-  eigen_assert(m_matrix.cols() == other.rows());
-  eigen_assert(!(Mode & ZeroDiag));
-  eigen_assert(Mode & (Upper|Lower));
+  eigen_assert(m_matrix.cols() == m_matrix.rows() && m_matrix.cols() == other.rows());
+  eigen_assert( (!(Mode & ZeroDiag)) && bool(Mode & (Upper|Lower)));
 
 //   enum { copy = internal::traits<OtherDerived>::Flags & RowMajorBit };
 
@@ -344,5 +343,7 @@ SparseMatrixBase<Derived>::solveTriangular(const MatrixBase<OtherDerived>& other
   return res;
 }
 #endif // EIGEN2_SUPPORT
+
+} // end namespace Eigen
 
 #endif // EIGEN_SPARSETRIANGULARSOLVER_H

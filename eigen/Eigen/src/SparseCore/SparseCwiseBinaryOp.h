@@ -25,6 +25,8 @@
 #ifndef EIGEN_SPARSE_CWISE_BINARY_OP_H
 #define EIGEN_SPARSE_CWISE_BINARY_OP_H
 
+namespace Eigen { 
+
 // Here we have to handle 3 cases:
 //  1 - sparse op dense
 //  2 - dense op sparse
@@ -63,8 +65,18 @@ class CwiseBinaryOpImpl<BinaryOp, Lhs, Rhs, Sparse>
 {
   public:
     class InnerIterator;
+    class ReverseInnerIterator;
     typedef CwiseBinaryOp<BinaryOp, Lhs, Rhs> Derived;
     EIGEN_SPARSE_PUBLIC_INTERFACE(Derived)
+    CwiseBinaryOpImpl()
+    {
+      typedef typename internal::traits<Lhs>::StorageKind LhsStorageKind;
+      typedef typename internal::traits<Rhs>::StorageKind RhsStorageKind;
+      EIGEN_STATIC_ASSERT((
+                (!internal::is_same<LhsStorageKind,RhsStorageKind>::value)
+            ||  ((Lhs::Flags&RowMajorBit) == (Rhs::Flags&RowMajorBit))),
+            THE_STORAGE_ORDER_OF_BOTH_SIDES_MUST_MATCH);
+    }
 };
 
 template<typename BinaryOp, typename Lhs, typename Rhs>
@@ -76,7 +88,7 @@ class CwiseBinaryOpImpl<BinaryOp,Lhs,Rhs,Sparse>::InnerIterator
     typedef internal::sparse_cwise_binary_op_inner_iterator_selector<
       BinaryOp,Lhs,Rhs, InnerIterator> Base;
 
-    EIGEN_STRONG_INLINE InnerIterator(const CwiseBinaryOpImpl& binOp, Index outer)
+    EIGEN_STRONG_INLINE InnerIterator(const CwiseBinaryOpImpl& binOp, typename CwiseBinaryOpImpl::Index outer)
       : Base(binOp.derived(),outer)
     {}
 };
@@ -246,7 +258,7 @@ class sparse_cwise_binary_op_inner_iterator_selector<scalar_product_op<T>, Lhs, 
     EIGEN_STRONG_INLINE operator bool() const { return m_lhsIter; }
 
   protected:
-    const RhsNested m_rhs;
+    RhsNested m_rhs;
     LhsIterator m_lhsIter;
     const BinaryFunc m_functor;
     const Index m_outer;
@@ -321,5 +333,7 @@ SparseMatrixBase<Derived>::cwiseProduct(const MatrixBase<OtherDerived> &other) c
 {
   return EIGEN_SPARSE_CWISE_PRODUCT_RETURN_TYPE(derived(), other.derived());
 }
+
+} // end namespace Eigen
 
 #endif // EIGEN_SPARSE_CWISE_BINARY_OP_H

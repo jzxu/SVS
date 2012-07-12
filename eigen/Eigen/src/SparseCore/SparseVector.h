@@ -25,6 +25,8 @@
 #ifndef EIGEN_SPARSEVECTOR_H
 #define EIGEN_SPARSEVECTOR_H
 
+namespace Eigen { 
+
 /** \ingroup SparseCore_Module
   * \class SparseVector
   *
@@ -47,13 +49,13 @@ struct traits<SparseVector<_Scalar, _Options, _Index> >
   typedef Sparse StorageKind;
   typedef MatrixXpr XprKind;
   enum {
-    IsColVector = _Options & RowMajorBit ? 0 : 1,
+    IsColVector = (_Options & RowMajorBit) ? 0 : 1,
 
     RowsAtCompileTime = IsColVector ? Dynamic : 1,
     ColsAtCompileTime = IsColVector ? 1 : Dynamic,
     MaxRowsAtCompileTime = RowsAtCompileTime,
     MaxColsAtCompileTime = ColsAtCompileTime,
-    Flags = _Options | NestByRefBit | LvalueBit,
+    Flags = _Options | NestByRefBit | LvalueBit | (IsColVector ? 0 : RowMajorBit),
     CoeffReadCost = NumTraits<Scalar>::ReadCost,
     SupportedAccessPatterns = InnerRandomAccessPattern
   };
@@ -134,11 +136,13 @@ class SparseVector
 
     inline void startVec(Index outer)
     {
+      EIGEN_UNUSED_VARIABLE(outer);
       eigen_assert(outer==0);
     }
 
     inline Scalar& insertBackByOuterInner(Index outer, Index inner)
     {
+      EIGEN_UNUSED_VARIABLE(outer);
       eigen_assert(outer==0);
       return insertBack(inner);
     }
@@ -158,7 +162,7 @@ class SparseVector
     Scalar& insert(Index i)
     {
       Index startId = 0;
-      Index p = m_data.size() - 1;
+      Index p = Index(m_data.size()) - 1;
       // TODO smart realloc
       m_data.resize(p+2,1);
 
@@ -242,9 +246,9 @@ class SparseVector
     inline SparseVector& operator=(const SparseMatrixBase<OtherDerived>& other)
     {
       if (int(RowsAtCompileTime)!=int(OtherDerived::RowsAtCompileTime))
-        return Base::operator=(other.transpose());
+        return assign(other.transpose());
       else
-        return Base::operator=(other);
+        return assign(other);
     }
 
     #ifndef EIGEN_PARSED_BY_DOXYGEN
@@ -311,6 +315,33 @@ class SparseVector
 #   ifdef EIGEN_SPARSEVECTOR_PLUGIN
 #     include EIGEN_SPARSEVECTOR_PLUGIN
 #   endif
+
+protected:
+    template<typename OtherDerived>
+    EIGEN_DONT_INLINE SparseVector& assign(const SparseMatrixBase<OtherDerived>& _other)
+    {
+      const OtherDerived& other(_other.derived());
+      const bool needToTranspose = (Flags & RowMajorBit) != (OtherDerived::Flags & RowMajorBit);
+      if(needToTranspose)
+      {
+        Index size = other.size();
+        Index nnz = other.nonZeros();
+        resize(size);
+        reserve(nnz);
+        for(Index i=0; i<size; ++i)
+        {
+          typename OtherDerived::InnerIterator it(other, i);
+          if(it)
+              insert(i) = it.value();
+        }
+        return *this;
+      }
+      else
+      {
+        // there is no special optimization
+        return Base::operator=(other);
+      }
+    }
 };
 
 template<typename Scalar, int _Options, typename _Index>
@@ -320,6 +351,7 @@ class SparseVector<Scalar,_Options,_Index>::InnerIterator
     InnerIterator(const SparseVector& vec, Index outer=0)
       : m_data(vec.m_data), m_id(0), m_end(static_cast<Index>(m_data.size()))
     {
+      EIGEN_UNUSED_VARIABLE(outer);
       eigen_assert(outer==0);
     }
 
@@ -351,6 +383,7 @@ class SparseVector<Scalar,_Options,_Index>::ReverseInnerIterator
     ReverseInnerIterator(const SparseVector& vec, Index outer=0)
       : m_data(vec.m_data), m_id(static_cast<Index>(m_data.size())), m_start(0)
     {
+      EIGEN_UNUSED_VARIABLE(outer);
       eigen_assert(outer==0);
     }
 
@@ -374,5 +407,7 @@ class SparseVector<Scalar,_Options,_Index>::ReverseInnerIterator
     Index m_id;
     const Index m_start;
 };
+
+} // end namespace Eigen
 
 #endif // EIGEN_SPARSEVECTOR_H

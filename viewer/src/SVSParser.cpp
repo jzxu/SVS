@@ -51,6 +51,12 @@ bool SVSParser::parse_mods(std::vector<std::string> &parts, SVSScene &scene, par
 	std::string name = parts[0];
 	std::string parent_name;
 	
+	if (parts.size() == 1 && name == "clear")
+	{
+		scene.clear_objects();
+		return true;
+	}
+	
 	if (parts.size() > 1)
 		parent_name = parts[1];
 	
@@ -99,7 +105,7 @@ bool SVSParser::parse_mods(std::vector<std::string> &parts, SVSScene &scene, par
 				
 				Zeni::Quaternion* temp_quaternion;
 				
-				temp_quaternion = new Zeni::Quaternion(temp_rotation.x, temp_rotation.y, temp_rotation.z);
+				temp_quaternion = new Zeni::Quaternion(temp_rotation.y, temp_rotation.x, temp_rotation.z);
 				
 				rotation = (*temp_quaternion);
 				

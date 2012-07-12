@@ -24,8 +24,6 @@ public:
 	SVSViewerState(SVSSocket::socket_type type);
 	~SVSViewerState();
 	
-	static int inputAvailible();
-	
 	bool reader_function();
 	
 	bool parse_command(std::string command);
@@ -37,16 +35,20 @@ public:
 	void on_key(const SDL_KeyboardEvent &event);
 	
 	void on_mouse_motion(const SDL_MouseMotionEvent &event);
+	void on_mouse_button(const SDL_MouseButtonEvent &event);
 	
 	void on_push();
 	void on_pop();
 	
+	bool button1_down;
+
+	SDL_mutex *mu;
+	
 private:
 	std::vector<std::string> reader_buffer;
 	
-	SVSSocket reader_socket;
+	SVSSocket *reader_socket;
 	
-	SDL_mutex *mu;
 	SDL_Thread* reader_thread;
 	
 	std::vector<SVSScene> scenes;
@@ -72,12 +74,14 @@ private:
 	float max_time_steps;
 	Zeni::Vector3f max_velo;
 	
-	void draw_grid(float xstart, float ystart, int rows, int columns, int distance = 50);
+	void draw_grid(float xstart, float ystart, int rows, int columns, float distance_x, float distance_y);
 	
 	bool grid;
 	bool wireframe;
 	
 	bool mouse_grabbed;
+
+	Zeni::Point3f backup_speed;
 };
 
 #endif

@@ -48,6 +48,8 @@
 
   #else // not CXX0X
 
+    namespace Eigen {
+
     namespace internal {
 
     template<bool condition>
@@ -101,11 +103,14 @@
         THIS_METHOD_IS_ONLY_FOR_ARRAYS_NOT_MATRICES,
         YOU_PASSED_A_ROW_VECTOR_BUT_A_COLUMN_VECTOR_WAS_EXPECTED,
         YOU_PASSED_A_COLUMN_VECTOR_BUT_A_ROW_VECTOR_WAS_EXPECTED,
-        THE_INDEX_TYPE_MUST_BE_A_SIGNED_TYPE
+        THE_INDEX_TYPE_MUST_BE_A_SIGNED_TYPE,
+        THE_STORAGE_ORDER_OF_BOTH_SIDES_MUST_MATCH
       };
     };
 
     } // end namespace internal
+
+    } // end namespace Eigen
 
     // Specialized implementation for MSVC to avoid "conditional
     // expression is constant" warnings.  This implementation doesn't

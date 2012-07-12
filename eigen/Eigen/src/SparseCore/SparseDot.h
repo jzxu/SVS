@@ -25,6 +25,8 @@
 #ifndef EIGEN_SPARSE_DOT_H
 #define EIGEN_SPARSE_DOT_H
 
+namespace Eigen { 
+
 template<typename Derived>
 template<typename OtherDerived>
 typename internal::traits<Derived>::Scalar
@@ -40,7 +42,7 @@ SparseMatrixBase<Derived>::dot(const MatrixBase<OtherDerived>& other) const
   eigen_assert(other.size()>0 && "you are using a non initialized vector");
 
   typename Derived::InnerIterator i(derived(),0);
-  Scalar res = 0;
+  Scalar res(0);
   while (i)
   {
     res += internal::conj(i.value()) * other.coeff(i.index());
@@ -62,9 +64,17 @@ SparseMatrixBase<Derived>::dot(const SparseMatrixBase<OtherDerived>& other) cons
 
   eigen_assert(size() == other.size());
 
-  typename Derived::InnerIterator i(derived(),0);
-  typename OtherDerived::InnerIterator j(other.derived(),0);
-  Scalar res = 0;
+  typedef typename Derived::Nested  Nested;
+  typedef typename OtherDerived::Nested  OtherNested;
+  typedef typename internal::remove_all<Nested>::type  NestedCleaned;
+  typedef typename internal::remove_all<OtherNested>::type  OtherNestedCleaned;
+
+  const Nested nthis(derived());
+  const OtherNested nother(other.derived());
+
+  typename NestedCleaned::InnerIterator i(nthis,0);
+  typename OtherNestedCleaned::InnerIterator j(nother,0);
+  Scalar res(0);
   while (i && j)
   {
     if (i.index()==j.index())
@@ -93,5 +103,7 @@ SparseMatrixBase<Derived>::norm() const
 {
   return internal::sqrt(squaredNorm());
 }
+
+} // end namespace Eigen
 
 #endif // EIGEN_SPARSE_DOT_H

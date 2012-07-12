@@ -48,6 +48,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef EIGEN_SPARSE_AMD_H
 #define EIGEN_SPARSE_AMD_H
 
+namespace Eigen { 
+
 namespace internal {
   
 template<typename T> inline T amd_flip(const T& i) { return -i-2; }
@@ -104,6 +106,7 @@ Index cs_tdfs(Index j, Index k, Index *head, const Index *next, Index *post, Ind
 template<typename Scalar, typename Index>
 void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,Index>& C, PermutationMatrix<Dynamic,Dynamic,Index>& perm)
 {
+  using std::sqrt;
   typedef SparseMatrix<Scalar,ColMajor,Index> CCS;
   
   int d, dk, dext, lemax = 0, e, elenk, eln, i, j, k, k1,
@@ -112,7 +115,7 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,Index>& C, Permutation
   unsigned int h;
   
   Index n = C.cols();
-  dense = std::max<Index> (16, 10 * sqrt ((double) n));   /* find dense threshold */
+  dense = std::max<Index> (16, Index(10 * sqrt(double(n))));   /* find dense threshold */
   dense = std::min<Index> (n-2, dense);
   
   Index cnz = C.nonZeros();
@@ -150,7 +153,7 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,Index>& C, Permutation
     elen[i]   = 0;                      // Ek of node i is empty
     degree[i] = len[i];                 // degree of node i
   }
-  mark = cs_wclear<Index>(0, 0, w, n);         /* clear w */
+  mark = internal::cs_wclear<Index>(0, 0, w, n);         /* clear w */
   elen[n] = -2;                         /* n is a dead element */
   Cp[n] = -1;                           /* n is a root of assembly tree */
   w[n] = 0;                             /* n is a dead element */
@@ -265,7 +268,7 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,Index>& C, Permutation
     elen[k] = -2;                     /* k is now an element */
     
     /* --- Find set differences ----------------------------------------- */
-    mark = cs_wclear<Index>(mark, lemax, w, n);  /* clear w if necessary */
+    mark = internal::cs_wclear<Index>(mark, lemax, w, n);  /* clear w if necessary */
     for(pk = pk1; pk < pk2; pk++)    /* scan 1: find |Le\Lk| */
     {
       i = Ci[pk];
@@ -348,7 +351,7 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,Index>& C, Permutation
     }                                   /* scan2 is done */
     degree[k] = dk;                   /* finalize |Lk| */
     lemax = std::max<Index>(lemax, dk);
-    mark = cs_wclear<Index>(mark+lemax, lemax, w, n);    /* clear w */
+    mark = internal::cs_wclear<Index>(mark+lemax, lemax, w, n);    /* clear w */
     
     /* --- Supernode detection ------------------------------------------ */
     for(pk = pk1; pk < pk2; pk++)
@@ -434,7 +437,7 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,Index>& C, Permutation
   }
   for(k = 0, i = 0; i <= n; i++)       /* postorder the assembly tree */
   {
-    if(Cp[i] == -1) k = cs_tdfs<Index>(i, k, head, next, perm.indices().data(), w);
+    if(Cp[i] == -1) k = internal::cs_tdfs<Index>(i, k, head, next, perm.indices().data(), w);
   }
   
   perm.indices().conservativeResize(n);
@@ -443,5 +446,7 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,Index>& C, Permutation
 }
 
 } // namespace internal
+
+} // end namespace Eigen
 
 #endif // EIGEN_SPARSE_AMD_H

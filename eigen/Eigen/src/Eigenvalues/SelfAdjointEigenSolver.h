@@ -26,8 +26,9 @@
 #ifndef EIGEN_SELFADJOINTEIGENSOLVER_H
 #define EIGEN_SELFADJOINTEIGENSOLVER_H
 
-#include "./EigenvaluesCommon.h"
 #include "./Tridiagonalization.h"
+
+namespace Eigen { 
 
 template<typename _MatrixType>
 class GeneralizedSelfAdjointEigenSolver;
@@ -242,7 +243,6 @@ template<typename _MatrixType> class SelfAdjointEigenSolver
     const MatrixType& eigenvectors() const
     {
       eigen_assert(m_isInitialized && "SelfAdjointEigenSolver is not initialized.");
-      eigen_assert(info() == Success && "Eigenvalue computation did not converge.");
       eigen_assert(m_eigenvectorsOk && "The eigenvectors have not been computed together with the eigenvalues.");
       return m_eivec;
     }
@@ -265,7 +265,6 @@ template<typename _MatrixType> class SelfAdjointEigenSolver
     const RealVectorType& eigenvalues() const
     {
       eigen_assert(m_isInitialized && "SelfAdjointEigenSolver is not initialized.");
-      eigen_assert(info() == Success && "Eigenvalue computation did not converge.");
       return m_eivalues;
     }
 
@@ -290,7 +289,6 @@ template<typename _MatrixType> class SelfAdjointEigenSolver
     MatrixType operatorSqrt() const
     {
       eigen_assert(m_isInitialized && "SelfAdjointEigenSolver is not initialized.");
-      eigen_assert(info() == Success && "Eigenvalue computation did not converge.");
       eigen_assert(m_eigenvectorsOk && "The eigenvectors have not been computed together with the eigenvalues.");
       return m_eivec * m_eivalues.cwiseSqrt().asDiagonal() * m_eivec.adjoint();
     }
@@ -316,7 +314,6 @@ template<typename _MatrixType> class SelfAdjointEigenSolver
     MatrixType operatorInverseSqrt() const
     {
       eigen_assert(m_isInitialized && "SelfAdjointEigenSolver is not initialized.");
-      eigen_assert(info() == Success && "Eigenvalue computation did not converge.");
       eigen_assert(m_eigenvectorsOk && "The eigenvectors have not been computed together with the eigenvalues.");
       return m_eivec * m_eivalues.cwiseInverse().cwiseSqrt().asDiagonal() * m_eivec.adjoint();
     }
@@ -427,7 +424,7 @@ SelfAdjointEigenSolver<MatrixType>& SelfAdjointEigenSolver<MatrixType>
 
   // map the matrix coefficients to [-1:1] to avoid over- and underflow.
   RealScalar scale = matrix.cwiseAbs().maxCoeff();
-  if(scale==Scalar(0)) scale = 1;
+  if(scale==RealScalar(0)) scale = RealScalar(1);
   mat = matrix / scale;
   m_subdiag.resize(n-1);
   internal::tridiagonalization_inplace(mat, diag, m_subdiag, computeEigenvectors);
@@ -497,7 +494,7 @@ namespace internal {
   
 template<typename SolverType,int Size,bool IsComplex> struct direct_selfadjoint_eigenvalues
 {
-  inline static void run(SolverType& eig, const typename SolverType::MatrixType& A, int options)
+  static inline void run(SolverType& eig, const typename SolverType::MatrixType& A, int options)
   { eig.compute(A,options); }
 };
 
@@ -507,13 +504,13 @@ template<typename SolverType> struct direct_selfadjoint_eigenvalues<SolverType,3
   typedef typename SolverType::RealVectorType VectorType;
   typedef typename SolverType::Scalar Scalar;
   
-  inline static void computeRoots(const MatrixType& m, VectorType& roots)
+  static inline void computeRoots(const MatrixType& m, VectorType& roots)
   {
     using std::sqrt;
     using std::atan2;
     using std::cos;
     using std::sin;
-    const Scalar s_inv3 = 1.0/3.0;
+    const Scalar s_inv3 = Scalar(1.0)/Scalar(3.0);
     const Scalar s_sqrt3 = sqrt(Scalar(3.0));
 
     // The characteristic equation is x^3 - c2*x^2 + c1*x - c0 = 0.  The
@@ -556,7 +553,7 @@ template<typename SolverType> struct direct_selfadjoint_eigenvalues<SolverType,3
     }
   }
   
-  inline static void run(SolverType& solver, const MatrixType& mat, int options)
+  static inline void run(SolverType& solver, const MatrixType& mat, int options)
   {
     using std::sqrt;
     eigen_assert(mat.cols() == 3 && mat.cols() == mat.rows());
@@ -682,7 +679,7 @@ template<typename SolverType> struct direct_selfadjoint_eigenvalues<SolverType,2
   typedef typename SolverType::RealVectorType VectorType;
   typedef typename SolverType::Scalar Scalar;
   
-  inline static void computeRoots(const MatrixType& m, VectorType& roots)
+  static inline void computeRoots(const MatrixType& m, VectorType& roots)
   {
     using std::sqrt;
     const Scalar t0 = Scalar(0.5) * sqrt( abs2(m(0,0)-m(1,1)) + Scalar(4)*m(1,0)*m(1,0));
@@ -691,7 +688,7 @@ template<typename SolverType> struct direct_selfadjoint_eigenvalues<SolverType,2
     roots(1) = t1 + t0;
   }
   
-  inline static void run(SolverType& solver, const MatrixType& mat, int options)
+  static inline void run(SolverType& solver, const MatrixType& mat, int options)
   {
     eigen_assert(mat.cols() == 2 && mat.cols() == mat.rows());
     eigen_assert((options&~(EigVecMask|GenEigMask))==0
@@ -799,6 +796,9 @@ static void tridiagonal_qr_step(RealScalar* diag, RealScalar* subdiag, Index sta
     }
   }
 }
+
 } // end namespace internal
+
+} // end namespace Eigen
 
 #endif // EIGEN_SELFADJOINTEIGENSOLVER_H

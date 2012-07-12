@@ -25,6 +25,7 @@
 #ifndef EIGEN_ITERATIVE_SOLVER_BASE_H
 #define EIGEN_ITERATIVE_SOLVER_BASE_H
 
+namespace Eigen { 
 
 /** \ingroup IterativeLinearSolvers_Module
   * \brief Base class for linear iterative solvers
@@ -32,7 +33,7 @@
   * \sa class SimplicialCholesky, DiagonalPreconditioner, IdentityPreconditioner
   */
 template< typename Derived>
-class IterativeSolverBase
+class IterativeSolverBase : internal::noncopyable
 {
 public:
   typedef typename internal::traits<Derived>::MatrixType MatrixType;
@@ -70,6 +71,39 @@ public:
   }
 
   ~IterativeSolverBase() {}
+  
+  /** Initializes the iterative solver for the sparcity pattern of the matrix \a A for further solving \c Ax=b problems.
+    *
+    * Currently, this function mostly call analyzePattern on the preconditioner. In the future
+    * we might, for instance, implement column reodering for faster matrix vector products.
+    */
+  Derived& analyzePattern(const MatrixType& A)
+  {
+    m_preconditioner.analyzePattern(A);
+    m_isInitialized = true;
+    m_analysisIsOk = true;
+    m_info = Success;
+    return derived();
+  }
+  
+  /** Initializes the iterative solver with the numerical values of the matrix \a A for further solving \c Ax=b problems.
+    *
+    * Currently, this function mostly call factorize on the preconditioner.
+    *
+    * \warning this class stores a reference to the matrix A as well as some
+    * precomputed values that depend on it. Therefore, if \a A is changed
+    * this class becomes invalid. Call compute() to update it with the new
+    * matrix A, or modify a copy of A.
+    */
+  Derived& factorize(const MatrixType& A)
+  {
+    eigen_assert(m_analysisIsOk && "You must first call analyzePattern()"); 
+    mp_matrix = &A;
+    m_preconditioner.factorize(A);
+    m_factorizationIsOk = true;
+    m_info = Success;
+    return derived();
+  }
 
   /** Initializes the iterative solver with the matrix \a A for further solving \c Ax=b problems.
     *
@@ -86,14 +120,16 @@ public:
     mp_matrix = &A;
     m_preconditioner.compute(A);
     m_isInitialized = true;
+    m_analysisIsOk = true;
+    m_factorizationIsOk = true;
     m_info = Success;
     return derived();
   }
 
   /** \internal */
-  Index rows() const { return mp_matrix->rows(); }
+  Index rows() const { return mp_matrix ? mp_matrix->rows() : 0; }
   /** \internal */
-  Index cols() const { return mp_matrix->cols(); }
+  Index cols() const { return mp_matrix ? mp_matrix->cols() : 0; }
 
   /** \returns the tolerance threshold used by the stopping criteria */
   RealScalar tolerance() const { return m_tolerance; }
@@ -112,7 +148,10 @@ public:
   const Preconditioner& preconditioner() const { return m_preconditioner; }
 
   /** \returns the max number of iterations */
-  int maxIterations() const { return m_maxIterations; }
+  int maxIterations() const
+  {
+    return (mp_matrix && m_maxIterations<0) ? mp_matrix->cols() : m_maxIterations;
+  }
   
   /** Sets the max number of iterations */
   Derived& setMaxIterations(int maxIters)
@@ -191,7 +230,9 @@ protected:
   void init()
   {
     m_isInitialized = false;
-    m_maxIterations = 1000;
+    m_analysisIsOk = false;
+    m_factorizationIsOk = false;
+    m_maxIterations = -1;
     m_tolerance = NumTraits<Scalar>::epsilon();
   }
   const MatrixType* mp_matrix;
@@ -203,7 +244,7 @@ protected:
   mutable RealScalar m_error;
   mutable int m_iterations;
   mutable ComputationInfo m_info;
-  mutable bool m_isInitialized;
+  mutable bool m_isInitialized, m_analysisIsOk, m_factorizationIsOk;
 };
 
 namespace internal {
@@ -221,6 +262,8 @@ struct sparse_solve_retval<IterativeSolverBase<Derived>, Rhs>
   }
 };
 
-}
+} // end namespace internal
+
+} // end namespace Eigen
 
 #endif // EIGEN_ITERATIVE_SOLVER_BASE_H

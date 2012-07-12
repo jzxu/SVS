@@ -10,6 +10,11 @@
 
 #include "SVSSocket.h"
 
+#include <iostream>
+#include <fstream>
+
+#include "SVSViewerState.h"
+
 //If we're not on windows
 #ifndef _WIN32
 const char* SVSSocket::default_path_pipe = "/tmp/viewer"; //Set this to the default path, /tmp/viewer
@@ -24,6 +29,8 @@ SVSSocket::SVSSocket(const char *path)
 {
 	if (strlen(path) == 0) //If we have an empty path,
 		path = default_path_pipe; //Set it to the default
+
+	standard_input = false;
 
 #ifndef _WIN32 //If we're not on windows
 	struct sockaddr_un address; //Create a variable for our unix socket
@@ -67,14 +74,45 @@ SVSSocket::SVSSocket(const char *path)
 
 	len = sizeof(struct sockaddr_un); //Set our length
 #else //Windows Pipe Code
+	static std::ofstream cerr_file("stderr.txt", std::ios::ate | std::ios::out | std::ios::app);
+    static std::ofstream cout_file("stdout.txt", std::ios::ate | std::ios::out | std::ios::app);
+
+    if(cerr_file.is_open()) {
+      cerr_bak = std::cerr.rdbuf();
+      std::cerr.rdbuf(cerr_file.rdbuf());
+    }
+
+    if(cout_file.is_open()) {
+      cout_bak = std::cout.rdbuf();
+      std::cout.rdbuf(cout_file.rdbuf());
+    }
+	
 	pipe = CreateNamedPipe(path, PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT, PIPE_UNLIMITED_INSTANCES, buffer_size, buffer_size, 0, NULL); //Create a message pipe
 
 	if (pipe == INVALID_HANDLE_VALUE) //Make sure it's valid
 	{
-		std::cout << "sock::sock invalid pipe" << std::endl; //Not valid so output it
+		std::cout << "Error creating pipe: " << GetLastError() << std::endl; //Not valid so output it
 		exit(1); //Then exit
 	}
 #endif
+}
+
+//Constructor for stdin
+SVSSocket::SVSSocket(bool standard_input)
+{
+	if (!standard_input) //If we don't want to use stdin
+	{
+		::SVSSocket(); //Use our default constructor
+		standard_input = false;
+	}
+	else //Otherwise
+	{
+		standard_input = true; //Set that we are using stdin
+
+#ifdef _WIN32
+		RedirectIOToConsole();
+#endif
+	}
 }
 
 #ifdef _WIN32
@@ -160,29 +198,6 @@ void SVSSocket::RedirectIOToConsole()
 
 #endif
 
-//Constructor for stdin
-SVSSocket::SVSSocket(bool standard_input)
-{
-	if (!standard_input) //If we don't want to use stdin
-		::SVSSocket(); //Use our default constructor
-	else //Otherwise
-	{
-		this->standard_input = true; //Set that we are using stdin
-
-#ifdef _WIN32
-		RedirectIOToConsole();
-#endif
-	}
-}
-
-SVSSocket::SVSSocket(SVSSocket::socket_type type)
-{
-	if (type == STDIN)
-		::SVSSocket(true);
-	else if (type == SOCKET)
-		::SVSSocket();
-}
-
 //Deconstructor
 SVSSocket::~SVSSocket()
 {
@@ -210,9 +225,10 @@ bool SVSSocket::listen()
 		return false; //Return that we had an error
 	}
 #else //On windows
-	BOOL success = ConnectNamedPipe(pipe, NULL); //Connect to the pipe
+	BOOL success = ConnectNamedPipe(pipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED); //Connect to the pipe
 	if (!success) //But if we had an error
 	{
+		std::cout << "Error waiting for connection pipe: " << GetLastError() << std::endl;
 		CloseHandle(pipe); //Close the pipe
 		return false; //Then return that we had an error
 	}
@@ -221,11 +237,33 @@ bool SVSSocket::listen()
 	return true; //Otherwise return success
 }
 
+#ifdef _WIN32
+#include <conio.h>
+#endif
+
+int SVSSocket::inputAvailible()
+{
+#ifdef _WIN32
+	return _kbhit();
+#else
+	struct timeval tv;
+	fd_set fds;
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+	FD_ZERO(&fds);
+	FD_SET(STDIN_FILENO, &fds);
+	select(STDIN_FILENO+1, &fds, NULL, NULL, &tv);
+	return (FD_ISSET(0, &fds));
+#endif
+}
+
 //Recieve a line from the socket/pipe
 bool SVSSocket::recieve_line(std::string &line)
 {
 	if (standard_input) //Are we using stdin or an actual socket?
 	{
+		while (!inputAvailible());
+
 		getline(std::cin, line); //Get one line
 
 		//We have no use for recieve_buffer here since we're using getline and only get one line at a time.  getline handles the rest for us along with cin.
@@ -265,5 +303,21 @@ bool SVSSocket::recieve_line(std::string &line)
 
 		buffer[n] = '\0'; //Make sure our buffer is null terminated
 		recieve_buffer += buffer; //Add the recieved buffer to our storing string
+	}
+
+	return true;
+}
+
+void SVSSocket::reopen_pipe()
+{
+	DisconnectNamedPipe(pipe);
+	CloseHandle(pipe);
+
+	pipe = CreateNamedPipe(default_path_pipe, PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT, PIPE_UNLIMITED_INSTANCES, buffer_size, buffer_size, 0, NULL); //Create a message pipe
+
+	if (pipe == INVALID_HANDLE_VALUE) //Make sure it's valid
+	{
+		std::cout << "Error creating pipe: " << GetLastError() << std::endl; //Not valid so output it
+		exit(1); //Then exit
 	}
 }

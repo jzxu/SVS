@@ -25,6 +25,8 @@
 #ifndef EIGEN_SPARSE_BLOCK_H
 #define EIGEN_SPARSE_BLOCK_H
 
+namespace Eigen { 
+
 namespace internal {
 template<typename MatrixType, int Size>
 struct traits<SparseInnerVectorSet<MatrixType, Size> >
@@ -59,6 +61,17 @@ class SparseInnerVectorSet : internal::no_assignment_operator,
       public:
         inline InnerIterator(const SparseInnerVectorSet& xpr, Index outer)
           : MatrixType::InnerIterator(xpr.m_matrix, xpr.m_outerStart + outer), m_outer(outer)
+        {}
+        inline Index row() const { return IsRowMajor ? m_outer : this->index(); }
+        inline Index col() const { return IsRowMajor ? this->index() : m_outer; }
+      protected:
+        Index m_outer;
+    };
+    class ReverseInnerIterator: public MatrixType::ReverseInnerIterator
+    {
+      public:
+        inline ReverseInnerIterator(const SparseInnerVectorSet& xpr, Index outer)
+          : MatrixType::ReverseInnerIterator(xpr.m_matrix, xpr.m_outerStart + outer), m_outer(outer)
         {}
         inline Index row() const { return IsRowMajor ? m_outer : this->index(); }
         inline Index col() const { return IsRowMajor ? this->index() : m_outer; }
@@ -127,6 +140,17 @@ class SparseInnerVectorSet<SparseMatrix<_Scalar, _Options, _Index>, Size>
       protected:
         Index m_outer;
     };
+    class ReverseInnerIterator: public MatrixType::ReverseInnerIterator
+    {
+      public:
+        inline ReverseInnerIterator(const SparseInnerVectorSet& xpr, Index outer)
+          : MatrixType::ReverseInnerIterator(xpr.m_matrix, xpr.m_outerStart + outer), m_outer(outer)
+        {}
+        inline Index row() const { return IsRowMajor ? m_outer : this->index(); }
+        inline Index col() const { return IsRowMajor ? this->index() : m_outer; }
+      protected:
+        Index m_outer;
+    };
 
     inline SparseInnerVectorSet(const MatrixType& matrix, Index outerStart, Index outerSize)
       : m_matrix(matrix), m_outerStart(outerStart), m_outerSize(outerSize)
@@ -153,12 +177,12 @@ class SparseInnerVectorSet<SparseMatrix<_Scalar, _Options, _Index>, Size>
       SparseMatrix<Scalar, IsRowMajor ? RowMajor : ColMajor, Index> tmp(other);
 
       // 2 - let's check whether there is enough allocated memory
-      Index nnz = tmp.nonZeros();
-      Index nnz_previous = nonZeros();
-      Index free_size = matrix.data().allocatedSize() + nnz_previous;
-      std::size_t nnz_head = m_outerStart==0 ? 0 : matrix.outerIndexPtr()[m_outerStart];
-      std::size_t tail = m_matrix.outerIndexPtr()[m_outerStart+m_outerSize.value()];
-      std::size_t nnz_tail = matrix.nonZeros() - tail;
+      Index nnz           = tmp.nonZeros();
+      Index nnz_previous  = nonZeros();
+      Index free_size     = Index(matrix.data().allocatedSize()) + nnz_previous;
+      Index nnz_head      = m_outerStart==0 ? 0 : matrix.outerIndexPtr()[m_outerStart];
+      Index tail          = m_matrix.outerIndexPtr()[m_outerStart+m_outerSize.value()];
+      Index nnz_tail      = matrix.nonZeros() - tail;
 
       if(nnz>free_size)
       {
@@ -237,20 +261,20 @@ class SparseInnerVectorSet<SparseMatrix<_Scalar, _Options, _Index>, Size>
 
     Index nonZeros() const
     {
-      if(m_matrix.compressed())
+      if(m_matrix.isCompressed())
         return  std::size_t(m_matrix.outerIndexPtr()[m_outerStart+m_outerSize.value()])
               - std::size_t(m_matrix.outerIndexPtr()[m_outerStart]);
       else if(m_outerSize.value()==0)
         return 0;
       else
-        return Map<const Matrix<Index,Size,1> >(m_matrix.innerNonZeroPtr(), m_outerSize.value()).sum();
+        return Map<const Matrix<Index,Size,1> >(m_matrix.innerNonZeroPtr()+m_outerStart, m_outerSize.value()).sum();
     }
 
     const Scalar& lastCoeff() const
     {
       EIGEN_STATIC_ASSERT_VECTOR_ONLY(SparseInnerVectorSet);
       eigen_assert(nonZeros()>0);
-      if(m_matrix.compressed())
+      if(m_matrix.isCompressed())
         return m_matrix.valuePtr()[m_matrix.outerIndexPtr()[m_outerStart+1]-1];
       else
         return m_matrix.valuePtr()[m_matrix.outerIndexPtr()[m_outerStart]+m_matrix.innerNonZeroPtr()[m_outerStart]-1];
@@ -267,7 +291,7 @@ class SparseInnerVectorSet<SparseMatrix<_Scalar, _Options, _Index>, Size>
 
   protected:
 
-    const typename MatrixType::Nested m_matrix;
+    typename MatrixType::Nested m_matrix;
     Index m_outerStart;
     const internal::variable_if_dynamic<Index, Size> m_outerSize;
 
@@ -372,5 +396,7 @@ SparseInnerVectorSet<Derived,Dynamic> SparseMatrixBase<Derived>::innerVectors(In
 template<typename Derived>
 const SparseInnerVectorSet<Derived,Dynamic> SparseMatrixBase<Derived>::innerVectors(Index outerStart, Index outerSize) const
 { return SparseInnerVectorSet<Derived,Dynamic>(derived(), outerStart, outerSize); }
+
+} // end namespace Eigen
 
 #endif // EIGEN_SPARSE_BLOCK_H

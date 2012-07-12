@@ -118,4 +118,6 @@ bool ipcsocket::send(const string &s) {
 		else
 			t.erase(0, n);
 	}
+
+	return true;
 }

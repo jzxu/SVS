@@ -25,6 +25,8 @@
 #ifndef EIGEN_ALIGNEDBOX_H
 #define EIGEN_ALIGNEDBOX_H
 
+namespace Eigen { 
+
 /** \geometry_module \ingroup Geometry_Module
   *
   *
@@ -190,7 +192,7 @@ EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF_VECTORIZABLE_FIXED_SIZE(_Scalar,_AmbientDim)
   template<typename Derived>
   inline bool contains(const MatrixBase<Derived>& a_p) const
   {
-    const typename internal::nested<Derived,2>::type p(a_p.derived());
+    typename internal::nested<Derived,2>::type p(a_p.derived());
     return (m_min.array()<=p.array()).all() && (p.array()<=m_max.array()).all();
   }
 
@@ -202,7 +204,7 @@ EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF_VECTORIZABLE_FIXED_SIZE(_Scalar,_AmbientDim)
   template<typename Derived>
   inline AlignedBox& extend(const MatrixBase<Derived>& a_p)
   {
-    const typename internal::nested<Derived,2>::type p(a_p.derived());
+    typename internal::nested<Derived,2>::type p(a_p.derived());
     m_min = m_min.cwiseMin(p);
     m_max = m_max.cwiseMax(p);
     return *this;
@@ -310,7 +312,7 @@ template<typename Derived>
 inline Scalar AlignedBox<Scalar,AmbientDim>::squaredExteriorDistance(const MatrixBase<Derived>& a_p) const
 {
   const typename internal::nested<Derived,2*AmbientDim>::type p(a_p.derived());
-  Scalar dist2 = 0.;
+  Scalar dist2(0);
   Scalar aux;
   for (Index k=0; k<dim(); ++k)
   {
@@ -331,7 +333,7 @@ inline Scalar AlignedBox<Scalar,AmbientDim>::squaredExteriorDistance(const Matri
 template<typename Scalar,int AmbientDim>
 inline Scalar AlignedBox<Scalar,AmbientDim>::squaredExteriorDistance(const AlignedBox& b) const
 {
-  Scalar dist2 = 0.;
+  Scalar dist2(0);
   Scalar aux;
   for (Index k=0; k<dim(); ++k)
   {
@@ -382,5 +384,7 @@ EIGEN_MAKE_TYPEDEFS_ALL_SIZES(double,               d)
 
 #undef EIGEN_MAKE_TYPEDEFS_ALL_SIZES
 #undef EIGEN_MAKE_TYPEDEFS
+
+} // end namespace Eigen
 
 #endif // EIGEN_ALIGNEDBOX_H

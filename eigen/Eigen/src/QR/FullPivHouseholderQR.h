@@ -26,6 +26,8 @@
 #ifndef EIGEN_FULLPIVOTINGHOUSEHOLDERQR_H
 #define EIGEN_FULLPIVOTINGHOUSEHOLDERQR_H
 
+namespace Eigen { 
+
 namespace internal {
 
 template<typename MatrixType> struct FullPivHouseholderQRMatrixQReturnType;
@@ -577,9 +579,9 @@ public:
     Index cols() const { return m_qr.rows(); }
 
 protected:
-  const typename MatrixType::Nested m_qr;
-  const typename HCoeffsType::Nested m_hCoeffs;
-  const typename IntColVectorType::Nested m_rowsTranspositions;
+  typename MatrixType::Nested m_qr;
+  typename HCoeffsType::Nested m_hCoeffs;
+  typename IntColVectorType::Nested m_rowsTranspositions;
 };
 
 } // end namespace internal
@@ -601,5 +603,7 @@ MatrixBase<Derived>::fullPivHouseholderQr() const
 {
   return FullPivHouseholderQR<PlainObject>(eval());
 }
+
+} // end namespace Eigen
 
 #endif // EIGEN_FULLPIVOTINGHOUSEHOLDERQR_H

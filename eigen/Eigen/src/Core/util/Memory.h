@@ -80,6 +80,8 @@
   #define EIGEN_HAS_MM_MALLOC 0
 #endif
 
+namespace Eigen {
+
 namespace internal {
 
 inline void throw_std_bad_alloc()
@@ -457,7 +459,7 @@ template<typename T, bool Align> inline void conditional_aligned_delete_auto(T *
   * There is also the variant first_aligned(const MatrixBase&) defined in DenseCoeffsBase.h.
   */
 template<typename Scalar, typename Index>
-inline static Index first_aligned(const Scalar* array, Index size)
+static inline Index first_aligned(const Scalar* array, Index size)
 {
   typedef typename packet_traits<Scalar>::type Packet;
   enum { PacketSize = packet_traits<Scalar>::size,
@@ -494,17 +496,15 @@ template<typename T> void smart_copy(const T* start, const T* end, T* target)
 }
 
 template<typename T> struct smart_copy_helper<T,true> {
-  inline static void run(const T* start, const T* end, T* target)
+  static inline void run(const T* start, const T* end, T* target)
   { memcpy(target, start, std::ptrdiff_t(end)-std::ptrdiff_t(start)); }
 };
 
 template<typename T> struct smart_copy_helper<T,false> {
-  inline static void run(const T* start, const T* end, T* target)
+  static inline void run(const T* start, const T* end, T* target)
   { std::copy(start, end, target); }
 };
 
-
-} // end namespace internal
 
 /*****************************************************************************
 *** Implementation of runtime stack allocation (falling back to malloc)    ***
@@ -519,8 +519,6 @@ template<typename T> struct smart_copy_helper<T,false> {
     #define EIGEN_ALLOCA _alloca
   #endif
 #endif
-
-namespace internal {
 
 // This helper class construct the allocated memory, and takes care of destructing and freeing the handled data
 // at destruction time. In practice this helper class is mainly useful to avoid memory leak in case of exceptions.
@@ -552,7 +550,7 @@ template<typename T> class aligned_stack_memory_handler
     bool m_deallocate;
 };
 
-}
+} // end namespace internal
 
 /** \internal
   * Declares, allocates and construct an aligned buffer named NAME of SIZE elements of type TYPE on the stack
@@ -640,7 +638,7 @@ template<typename T> class aligned_stack_memory_handler
 
 #define EIGEN_MAKE_ALIGNED_OPERATOR_NEW EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF(true)
 #define EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF_VECTORIZABLE_FIXED_SIZE(Scalar,Size) \
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF(((Size)!=Eigen::Dynamic) && ((sizeof(Scalar)*(Size))%16==0))
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF(bool(((Size)!=Eigen::Dynamic) && ((sizeof(Scalar)*(Size))%16==0)))
 
 /****************************************************************************/
 
@@ -688,24 +686,24 @@ public:
         return &value;
     }
 
-    aligned_allocator() throw()
+    aligned_allocator()
     {
     }
 
-    aligned_allocator( const aligned_allocator& ) throw()
+    aligned_allocator( const aligned_allocator& )
     {
     }
 
     template<class U>
-    aligned_allocator( const aligned_allocator<U>& ) throw()
+    aligned_allocator( const aligned_allocator<U>& )
     {
     }
 
-    ~aligned_allocator() throw()
+    ~aligned_allocator()
     {
     }
 
-    size_type max_size() const throw()
+    size_type max_size() const
     {
         return (std::numeric_limits<size_type>::max)();
     }
@@ -721,6 +719,15 @@ public:
     {
         ::new( p ) T( value );
     }
+
+    // Support for c++11
+#if (__cplusplus >= 201103L)
+    template<typename... Args>
+    void  construct(pointer p, Args&&... args)
+    {
+      ::new(p) T(std::forward<Args>(args)...);
+    }
+#endif
 
     void destroy( pointer p )
     {
@@ -741,19 +748,21 @@ public:
 
 //---------- Cache sizes ----------
 
-#if defined(__GNUC__) && ( defined(__i386__) || defined(__x86_64__) )
-#  if defined(__PIC__) && defined(__i386__)
-     // Case for x86 with PIC
-#    define EIGEN_CPUID(abcd,func,id) \
-       __asm__ __volatile__ ("xchgl %%ebx, %%esi;cpuid; xchgl %%ebx,%%esi": "=a" (abcd[0]), "=S" (abcd[1]), "=c" (abcd[2]), "=d" (abcd[3]) : "a" (func), "c" (id));
-#  else
-     // Case for x86_64 or x86 w/o PIC
-#    define EIGEN_CPUID(abcd,func,id) \
-       __asm__ __volatile__ ("cpuid": "=a" (abcd[0]), "=b" (abcd[1]), "=c" (abcd[2]), "=d" (abcd[3]) : "a" (func), "c" (id) );
-#  endif
-#elif defined(_MSC_VER)
-#  if (_MSC_VER > 1500)
-#    define EIGEN_CPUID(abcd,func,id) __cpuidex((int*)abcd,func,id)
+#if !defined(EIGEN_NO_CPUID)
+#  if defined(__GNUC__) && ( defined(__i386__) || defined(__x86_64__) )
+#    if defined(__PIC__) && defined(__i386__)
+       // Case for x86 with PIC
+#      define EIGEN_CPUID(abcd,func,id) \
+         __asm__ __volatile__ ("xchgl %%ebx, %%esi;cpuid; xchgl %%ebx,%%esi": "=a" (abcd[0]), "=S" (abcd[1]), "=c" (abcd[2]), "=d" (abcd[3]) : "a" (func), "c" (id));
+#    else
+       // Case for x86_64 or x86 w/o PIC
+#      define EIGEN_CPUID(abcd,func,id) \
+         __asm__ __volatile__ ("cpuid": "=a" (abcd[0]), "=b" (abcd[1]), "=c" (abcd[2]), "=d" (abcd[3]) : "a" (func), "c" (id) );
+#    endif
+#  elif defined(_MSC_VER)
+#    if (_MSC_VER > 1500)
+#      define EIGEN_CPUID(abcd,func,id) __cpuidex((int*)abcd,func,id)
+#    endif
 #  endif
 #endif
 
@@ -763,7 +772,7 @@ namespace internal {
 
 inline bool cpuid_is_vendor(int abcd[4], const char* vendor)
 {
-  return abcd[1]==((int*)(vendor))[0] && abcd[3]==((int*)(vendor))[1] && abcd[2]==((int*)(vendor))[2];
+  return abcd[1]==(reinterpret_cast<const int*>(vendor))[0] && abcd[3]==(reinterpret_cast<const int*>(vendor))[1] && abcd[2]==(reinterpret_cast<const int*>(vendor))[2];
 }
 
 inline void queryCacheSizes_intel_direct(int& l1, int& l2, int& l3)
@@ -952,5 +961,7 @@ inline int queryTopLevelCacheSize()
 }
 
 } // end namespace internal
+
+} // end namespace Eigen
 
 #endif // EIGEN_MEMORY_H

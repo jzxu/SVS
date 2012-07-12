@@ -25,6 +25,8 @@
 #ifndef EIGEN_SPARSEPRODUCT_H
 #define EIGEN_SPARSEPRODUCT_H
 
+namespace Eigen { 
+
 template<typename Lhs, typename Rhs>
 struct SparseSparseProductReturnType
 {
@@ -38,11 +40,11 @@ struct SparseSparseProductReturnType
 
   typedef typename internal::conditional<TransposeLhs,
     SparseMatrix<Scalar,0>,
-    const typename internal::nested<Lhs,Rhs::RowsAtCompileTime>::type>::type LhsNested;
+    typename internal::nested<Lhs,Rhs::RowsAtCompileTime>::type>::type LhsNested;
 
   typedef typename internal::conditional<TransposeRhs,
     SparseMatrix<Scalar,0>,
-    const typename internal::nested<Rhs,Lhs::RowsAtCompileTime>::type>::type RhsNested;
+    typename internal::nested<Rhs,Lhs::RowsAtCompileTime>::type>::type RhsNested;
 
   typedef SparseSparseProduct<LhsNested, RhsNested> Type;
 };
@@ -193,5 +195,7 @@ SparseMatrixBase<Derived>::operator*(const SparseMatrixBase<OtherDerived> &other
 {
   return typename SparseSparseProductReturnType<Derived,OtherDerived>::Type(derived(), other.derived());
 }
+
+} // end namespace Eigen
 
 #endif // EIGEN_SPARSEPRODUCT_H

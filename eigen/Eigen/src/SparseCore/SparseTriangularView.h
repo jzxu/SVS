@@ -25,6 +25,8 @@
 #ifndef EIGEN_SPARSE_TRIANGULARVIEW_H
 #define EIGEN_SPARSE_TRIANGULARVIEW_H
 
+namespace Eigen { 
+
 namespace internal {
   
 template<typename MatrixType, int Mode>
@@ -53,9 +55,7 @@ template<typename MatrixType, int Mode> class SparseTriangularView
     inline Index rows() const { return m_matrix.rows(); }
     inline Index cols() const { return m_matrix.cols(); }
 
-    //typedef typename internal::conditional<internal::must_nest_by_value<MatrixType>::ret,
-    //    MatrixType, const MatrixType&>::type MatrixTypeNested;
-    typedef typename internal::nested<MatrixType>::type MatrixTypeNested;
+    typedef typename MatrixType::Nested MatrixTypeNested;
     typedef typename internal::remove_reference<MatrixTypeNested>::type MatrixTypeNestedNonRef;
     typedef typename internal::remove_all<MatrixTypeNested>::type MatrixTypeNestedCleaned;
 
@@ -76,9 +76,9 @@ template<typename MatrixType, int Mode> class SparseTriangularView
 };
 
 template<typename MatrixType, int Mode>
-class SparseTriangularView<MatrixType,Mode>::InnerIterator : public MatrixType::InnerIterator
+class SparseTriangularView<MatrixType,Mode>::InnerIterator : public MatrixTypeNestedCleaned::InnerIterator
 {
-    typedef typename MatrixType::InnerIterator Base;
+    typedef typename MatrixTypeNestedCleaned::InnerIterator Base;
   public:
 
     EIGEN_STRONG_INLINE InnerIterator(const SparseTriangularView& view, Index outer)
@@ -140,9 +140,9 @@ class SparseTriangularView<MatrixType,Mode>::InnerIterator : public MatrixType::
 };
 
 template<typename MatrixType, int Mode>
-class SparseTriangularView<MatrixType,Mode>::ReverseInnerIterator : public MatrixType::ReverseInnerIterator
+class SparseTriangularView<MatrixType,Mode>::ReverseInnerIterator : public MatrixTypeNestedCleaned::ReverseInnerIterator
 {
-    typedef typename MatrixType::ReverseInnerIterator Base;
+    typedef typename MatrixTypeNestedCleaned::ReverseInnerIterator Base;
   public:
 
     EIGEN_STRONG_INLINE ReverseInnerIterator(const SparseTriangularView& view, Index outer)
@@ -173,5 +173,7 @@ SparseMatrixBase<Derived>::triangularView() const
 {
   return derived();
 }
+
+} // end namespace Eigen
 
 #endif // EIGEN_SPARSE_TRIANGULARVIEW_H

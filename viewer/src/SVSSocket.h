@@ -31,7 +31,6 @@ public:
 	} socket_type;
 	
 	SVSSocket(const char* path = ""); //Initializes SVSSocket with a path to the Unix Socket, however, on windows the path argument is ignored because on windows it uses pipes.  Ideally you should just leave this to the default which will be set if you leave it to nothing ie. SVSSocket();
-	SVSSocket(const char* path = "");
 	SVSSocket(bool standard_input); //Used for standard input
 	SVSSocket(socket_type type);
 	
@@ -40,6 +39,14 @@ public:
 	bool listen(); //Accept a connection.  Warning, this is a *blocking* call which means it won't return until it has a connection
 	bool recieve_line(std::string &line); //Read a line from the buffer.  Again, Warning, this is a *blocking* call which means it won't return until it has something to return
 	
+	bool is_standard_input() { return standard_input; }
+
+	bool client_disconnected() { return GetLastError() == ERROR_BROKEN_PIPE; }
+
+#ifdef _WIN32
+	void reopen_pipe();
+#endif
+
 private:
 	std::string recieve_buffer; //Buffer to handle input
 	
@@ -57,13 +64,16 @@ private:
 
 #ifdef _WIN32
 	void RedirectIOToConsole();
+
+	std::streambuf* cout_bak;
+	std::streambuf* cerr_bak;
 #endif
 	
 	void initialize_stdin();
 	void initialize_socket(const char* path);
 	void initialize_file(const char* path);
 	
-	std::string hello_world;
+	static int inputAvailible();
 };
 
 #endif

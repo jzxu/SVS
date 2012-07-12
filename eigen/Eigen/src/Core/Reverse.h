@@ -27,6 +27,8 @@
 #ifndef EIGEN_REVERSE_H
 #define EIGEN_REVERSE_H
 
+namespace Eigen { 
+
 /** \class Reverse
   * \ingroup Core_Module
   *
@@ -190,7 +192,7 @@ template<typename MatrixType, int Direction> class Reverse
     }
 
   protected:
-    const typename MatrixType::Nested m_matrix;
+    typename MatrixType::Nested m_matrix;
 };
 
 /** \returns an expression of the reverse of *this.
@@ -232,5 +234,6 @@ inline void DenseBase<Derived>::reverseInPlace()
   derived() = derived().reverse().eval();
 }
 
+} // end namespace Eigen
 
 #endif // EIGEN_REVERSE_H
