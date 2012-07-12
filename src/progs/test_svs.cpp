@@ -7,8 +7,6 @@
 #include <cstdlib>
 #include <sml_Client.h>
 
-#define EXPORT
-
 using namespace std;
 using namespace sml;
 
