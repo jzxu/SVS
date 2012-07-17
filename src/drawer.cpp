@@ -4,7 +4,7 @@
 #include "common.h"
 
 #ifdef _WIN32
-#include <windows.h>
+#include "portability.h"
 #endif
 
 using namespace std;

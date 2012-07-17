@@ -8,7 +8,7 @@
 #include <errno.h>
 #include <unistd.h>
 #else
-#include <windows.h>
+#include "portability.h"
 #endif
 
 #include <iostream>

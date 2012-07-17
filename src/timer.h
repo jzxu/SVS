@@ -7,6 +7,8 @@
 #include "misc.h"
 
 #ifdef _WIN32
+#define INFINITY 0xffffffff
+
 #undef min
 #undef max
 #endif

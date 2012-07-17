@@ -1,6 +1,11 @@
 #include <sstream>
 #include <iterator>
 #include <utility>
+
+#ifdef _WIN32
+#include "portability.h"
+#endif
+
 #include "scene.h"
 #include "filter.h"
 
