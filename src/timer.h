@@ -6,6 +6,11 @@
 #include "portability.h"
 #include "misc.h"
 
+#ifdef _WIN32
+#undef min
+#undef max
+#endif
+
 class timer_set;
 
 class timer {
