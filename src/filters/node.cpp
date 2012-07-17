@@ -17,61 +17,88 @@ public:
 	node_filter(scene *scn, filter_input *input) : typed_map_filter<const sgnode*>(input), scn(scn) {}
 	
 	~node_filter() {
-		map<sgnode*, const filter_param_set*>::iterator i;
-		for (i = node2param.begin(); i != node2param.end(); ++i) {
+		map<sgnode*, node_info>::iterator i;
+		for (i = nodes.begin(); i != nodes.end(); ++i) {
 			i->first->unlisten(this);
 		}
 	}
 	
 	bool compute(const filter_param_set *params, bool adding, const sgnode *&res, bool &changed) {
 		sgnode *newres;
-		string name;
+		string id;
 		
-		if (!get_filter_param(this, params, "name", name)) {
-			set_error("expecting parameter name");
+		if (!get_filter_param(this, params, "id", id)) {
+			set_error("expecting parameter id");
 			return false;
 		}
-		if ((newres = scn->get_node(name)) == NULL) {
+		if ((newres = scn->get_node(id)) == NULL) {
 			stringstream ss;
-			ss << "no node called \"" << name << "\"";
+			ss << "no node with id \"" << id << "\"";
 			set_error(ss.str());
 			return false;
 		}
 		
-		changed = (newres != res);
-		if (!adding && changed) {
-			del_node(const_cast<sgnode*>(res));
-			node2param[newres] = params;
-			newres->listen(this);
+		if (newres != res) {
+			add_entry(newres, params);
+			if (!adding) {
+				del_entry(const_cast<sgnode*>(res), params);
+			}
+			res = newres;
+			changed = true;
+		} else {
+			// report whether the node itself changed since the last time
+			node_info *info = map_get(nodes, const_cast<sgnode*>(res));
+			assert(info);
+			changed = info->changed;
+			info->changed = false;
 		}
-		res = newres;
 		return true;
 	}
 	
-	void del_node(sgnode *n) {
-		map<sgnode*, const filter_param_set*>::iterator i = node2param.find(n);
-		if (i != node2param.end()) {
+	void add_entry(sgnode *n, const filter_param_set *params) {
+		map<sgnode*, node_info>::iterator i = nodes.find(n);
+		if (i == nodes.end()) {
+			n->listen(this);
+		}
+		nodes[n].params.push_back(params);
+	}
+	
+	void del_entry(sgnode *n, const filter_param_set *params) {
+		map<sgnode*, node_info>::iterator i = nodes.find(n);
+		assert(i != nodes.end());
+		list<const filter_param_set*> &p = i->second.params;
+		list<const filter_param_set*>::iterator j = find(p.begin(), p.end(), params);
+		assert(j != p.end());
+		p.erase(j);
+		if (p.empty()) {
 			i->first->unlisten(this);
-			node2param.erase(i);
+			nodes.erase(i);
 		}
 	}
 	
 	void node_update(sgnode *n, sgnode::change_type t, int added) {
 		if (t == sgnode::DELETED || t == sgnode::TRANSFORM_CHANGED || t == sgnode::SHAPE_CHANGED) {
-			const filter_param_set *s;
-			if (!map_get(node2param, n, s)) {
-				assert(false);
+			node_info *info = map_get(nodes, n);
+			assert(info);
+			list<const filter_param_set*>::const_iterator i;
+			for (i = info->params.begin(); i != info->params.end(); ++i) {
+				mark_stale(*i);
 			}
-			mark_stale(s);
+			info->changed = true;
 			if (t == sgnode::DELETED) {
-				del_node(n);
+				nodes.erase(n);
 			}
 		}
 	}
 
 private:
+	struct node_info {
+		list<const filter_param_set*> params;
+		bool changed;
+	};
+	
 	scene *scn;
-	map<sgnode*, const filter_param_set*> node2param;
+	map<sgnode*, node_info> nodes;
 };
 
 /* Return all nodes from the scene */
@@ -160,6 +187,158 @@ public:
 	}
 };
 
+/*
+ Generate a new node. Memory management is a little tricky. First note that
+ although the filter result list owns the memory of the filter_val objects that
+ wrap the generated nodes, it doesn't own the memory of the actual nodes. Those
+ are owned by the filter, and it is responsible in most cases for deallocating
+ them when they are removed from the scene. There are 3 ways this can happen:
+
+ 1. The filter is deleted. Then all generated nodes are deallocated in the
+    filter's destructor.
+
+ 2. The filter input associated with the node is deleted. Then the single node
+    associated with the input is deallocated in "result_removed".
+
+ 3. The generated node's parent is deleted. In this case all the parent's
+    children are recursively deallocated in the parent's destructor, so the
+    filter should not try to deallocate it again. This case is handled in the
+    node listener callback "node_update", where the deleted node is taken off
+    the list of generated nodes. This case also needs to be handled when the
+    filter tries to update the already deleted node. 
+*/
+class gen_node_filter : public typed_map_filter<sgnode*>, public sgnode_listener {
+public:
+	gen_node_filter(filter_input *input) : typed_map_filter<sgnode*>(input) {}
+
+	~gen_node_filter() {
+		list<sgnode*>::iterator i;
+		for (i = nodes.begin(); i != nodes.end(); ++i) {
+			(**i).unlisten(this);
+			delete *i;
+		}
+	}
+	
+	bool compute(const filter_param_set *params, bool adding, sgnode *&res, bool &changed) {
+		string id;
+		vec3 pos, rot, scale, singlept;
+		ptlist *pts = NULL;
+		double radius;
+		
+		if (!adding) {
+			if (find(nodes.begin(), nodes.end(), res) == nodes.end()) {
+				// See case 3 in the class comment above
+				adding = true;
+				changed = true;
+			}
+		}
+		
+		if (adding && !get_filter_param(NULL, params, "id", id)) {
+			set_error("no id");
+			return false;
+		}
+		
+		if (get_filter_param(NULL, params, "points", pts)) {
+			if (adding) {
+				res = new convex_node(id, *pts);
+			} else {
+				convex_node *c = dynamic_cast<convex_node*>(res);
+				if (!c) {
+					set_error("not a convex node");
+					return false;
+				}
+				if (c->get_local_points() != *pts) {
+					c->set_local_points(*pts);
+					changed = true;
+				}
+			}
+		} else if (get_filter_param(this, params, "points", singlept)) {
+			ptlist l;
+			l.push_back(singlept);
+			if (adding) {
+				res = new convex_node(id, l);
+			} else {
+				convex_node *c = dynamic_cast<convex_node*>(res);
+				if (!c) {
+					set_error("not a convex node");
+					return false;
+				}
+				if (c->get_local_points() != l) {
+					c->set_local_points(l);
+					changed = true;
+				}
+			}
+		} else if (get_filter_param(this, params, "radius", radius)) {
+			if (adding) {
+				res = new ball_node(id, radius);
+			} else {
+				ball_node *b = dynamic_cast<ball_node*>(res);
+				if (!b) {
+					set_error("not a ball node");
+					return false;
+				}
+				if (b->get_radius() != radius) {
+					b->set_radius(radius);
+					changed = true;
+				}
+			}
+		} else if (adding) {
+			res = new group_node(id);
+		}
+		
+		if (adding) {
+			nodes.push_back(res);
+			res->listen(this);
+		}
+		
+		if (!get_filter_param(NULL, params, "pos", pos)) {
+			pos = vec3::Zero();
+		}
+		if (!get_filter_param(NULL, params, "rot", rot)) {
+			rot = vec3::Zero();
+		}
+		if (!get_filter_param(NULL, params, "scale", scale)) {
+			scale = vec3::Constant(1.0);
+		}
+		
+		if (res->get_trans('p') != pos) {
+			res->set_trans('p', pos);
+			changed = true;
+		}
+		if (res->get_trans('r') != rot) {
+			res->set_trans('r', rot);
+			changed = true;
+		}
+		if (res->get_trans('s') != scale) {
+			res->set_trans('s', scale);
+			changed = true;
+		}
+		
+		return true;
+	}
+
+	void result_removed(const sgnode *&res) {
+		remove_node(res);
+		delete res;
+	}
+	
+	void node_update(sgnode *n, sgnode::change_type t, int added) {
+		if (t == sgnode::DELETED) {
+			remove_node(n);
+		}
+	}
+	
+	void remove_node(const sgnode *n) {
+		list<sgnode*>::iterator i = find(nodes.begin(), nodes.end(), n);
+		assert(i != nodes.end());
+		(**i).unlisten(this);
+		nodes.erase(i);
+	}
+	
+private:
+	list<sgnode*> nodes;
+};
+
 filter *make_node_filter(scene *scn, filter_input *input) {
 	return new node_filter(scn, input);
 }
@@ -171,14 +350,15 @@ filter *make_all_nodes_filter(scene *scn, filter_input *input) {
 filter *make_node_centroid_filter(scene *scn, filter_input *input) {
 	return new node_centroid_filter(input);
 }
+filter* _make_gen_node_filter_(scene *scn, filter_input *input) {
+	return new gen_node_filter(input);
+}
 
 filter_table_entry node_fill_entry() {
 	filter_table_entry e;
 	e.name = "node";
-	e.parameters.push_back("name");
+	e.parameters.push_back("id");
 	e.create = &make_node_filter;
-	e.calc = NULL;
-	e.possible_args = NULL;
 	return e;
 }
 
@@ -186,17 +366,20 @@ filter_table_entry all_nodes_fill_entry() {
 	filter_table_entry e;
 	e.name = "all_nodes";
 	e.create = &make_all_nodes_filter;
-	e.calc = NULL;
-	e.possible_args = NULL;
 	return e;
 }
 
 filter_table_entry node_centroid_fill_entry() {
 	filter_table_entry e;
 	e.name = "node_centroid";
-	e.parameters.push_back("name");
+	e.parameters.push_back("node");
 	e.create = &make_node_centroid_filter;
-	e.calc = NULL;
-	e.possible_args = NULL;
+	return e;
+}
+
+filter_table_entry gen_node_fill_entry() {
+	filter_table_entry e;
+	e.name = "gen_node";
+	e.create = &_make_gen_node_filter_;
 	return e;
 }

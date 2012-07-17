@@ -49,6 +49,7 @@ bool predict_traj(multi_model *mdl, const rvec &initstate, const std::list<rvec>
 class objective {
 public:
 	objective() : negated(false) {}
+	virtual ~objective() {}
 	
 	float evaluate(scene &scn) const {
 		if (negated) {

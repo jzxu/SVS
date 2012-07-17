@@ -132,11 +132,15 @@ const bbox &sgnode::get_bounds() const {
 	return bounds;
 }
 
-const vec3 &sgnode::get_centroid() const {
+vec3 sgnode::get_centroid() const {
 	if (shape_dirty) {
 		const_cast<sgnode*>(this)->update_shape();
 	}
 	return centroid;
+}
+
+vec3 sgnode::get_world_centroid() const {
+	return get_world_trans()(get_centroid());
 }
 
 void sgnode::set_bounds(const bbox &b) {
@@ -321,4 +325,9 @@ void ball_node::update_shape() {
 	bb.include(t(vec3( radius, radius,-radius)));
 	bb.include(t(vec3( radius, radius, radius)));
 	set_bounds(bb);
+}
+
+void ball_node::set_radius(double r) {
+	radius = r;
+	set_shape_dirty();
 }
