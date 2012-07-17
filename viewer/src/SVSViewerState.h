@@ -39,7 +39,7 @@ public:
 	
 	void on_push();
 	void on_pop();
-	
+
 	bool button1_down;
 
 	SDL_mutex *mu;

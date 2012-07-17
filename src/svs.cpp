@@ -410,7 +410,7 @@ void svs::input_callback() {
 	
 	svs_state *topstate = state_stack.front();
 	proc_input(topstate);
-	topstate->update_models();
+	//topstate->update_models();
 	
 	vector<svs_state*>::iterator i;
 	for (i = state_stack.begin(); i != state_stack.end(); ++i) {
