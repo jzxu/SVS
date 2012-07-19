@@ -33,13 +33,13 @@ public:
 	void transform_scale(Zeni::Point3f amount);
 	void transform_rotation(Zeni::Quaternion amount);
 	
-	void transform(Zeni::Matrix4f transformation_matrix);
+	void transform(Zeni::Matrix4f transformation_matrix, Zeni::Point3f pos, Zeni::Quaternion rotation, Zeni::Point3f scale);
 	
 	void render();
 	void render_wireframe();
 	
 	const bool is_a_group() { return is_group; }
-	const std::vector<SVSObject*> getChildren() { return children; }
+	std::vector<SVSObject*> &getChildren() { return children; }
 	bool addChild(SVSObject* object);
 	
 	Zeni::Matrix4f get_transformation_matrix() { return transformation_matrix; }

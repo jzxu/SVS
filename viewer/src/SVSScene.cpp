@@ -57,7 +57,7 @@ void SVSScene::clear_objects()
 	add_object("world", "", std::vector<Zeni::Point3f>(), Zeni::Point3f(), Zeni::Quaternion(), Zeni::Point3f(scale,scale,scale)); 
 }
 
-SVSObject* SVSScene::find_object_in_objects(std::vector<SVSObject*> objects, std::string name)
+SVSObject* SVSScene::find_object_in_objects(std::vector<SVSObject*> &objects, std::string name)
 {
 	for (unsigned int i = 0;i < objects.size();i++)
 	{
@@ -65,7 +65,11 @@ SVSObject* SVSScene::find_object_in_objects(std::vector<SVSObject*> objects, std
 			return objects[i];
 
 		if (objects[i]->is_a_group())
-			return find_object_in_objects(objects[i]->getChildren(), name);
+		{
+			std::vector<SVSObject*> &children = objects[i]->getChildren();
+
+			return find_object_in_objects(children, name);
+		}
 	}
 
 	return NULL;
@@ -98,43 +102,61 @@ bool SVSScene::update_object(std::string name, Zeni::Point3f position, Zeni::Qua
 {
 	SVSObject* object = get_object_by_name(name);
 
+	if (object == NULL)
+		return false;
+
 	Zeni::Matrix4f transformation = Zeni::Matrix4f::Translate(position) * Zeni::Matrix4f::Rotate(rotation) * Zeni::Matrix4f::Scale(scale);
 
-	object->transform(transformation);
+	object->transform(transformation, position, rotation, scale);
 
 	return true;
 }
 
-bool SVSScene::delete_object(std::string name)
+bool SVSScene::delete_object_recursive(std::string name, std::vector<SVSObject*> &objects)
 {
-	bool deleted = false;
-	for (std::vector<SVSObject*>::iterator it = objects.begin();it != objects.end();)
+	for (std::vector<SVSObject*>::iterator it = objects.begin();it != objects.end();it++)
 	{
 		if ((*it)->get_name() == name)
 		{
-			delete (*it);
-			it = objects.erase(it);
-
-			deleted = true;
-
-			break;
+			objects.erase(it);
+			return true;
 		}
 		else
-			++it;
+		{
+			std::vector<SVSObject*> &children = (*it)->getChildren();
+
+			if (delete_object_recursive(name, children))
+				return true;
+		}
 	}
 
-	return deleted;
+	return false;
 }
 
-SVSObject* SVSScene::get_object_by_name(std::string name)
+bool SVSScene::delete_object(std::string name)
+{
+	return delete_object_recursive(name, objects);
+}
+
+SVSObject* SVSScene::get_object_in_vector(std::string name, std::vector<SVSObject*> &objects)
 {
 	for (std::vector<SVSObject*>::iterator it = objects.begin();it != objects.end();++it)
 	{
 		if ((*it)->get_name() == name)
 			return (*it);
+
+		std::vector<SVSObject*> &children = (*it)->getChildren();
+		SVSObject* object = get_object_in_vector(name, children);
+		if (object != NULL)
+			return object;
 	}
 
 	return NULL;
+}
+
+SVSObject* SVSScene::get_object_by_name(std::string name)
+{
+	return get_object_in_vector(name, objects);
 }
 
 std::string SVSScene::get_scene_name()

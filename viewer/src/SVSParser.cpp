@@ -57,17 +57,21 @@ bool SVSParser::parse_mods(std::vector<std::string> &parts, SVSScene &scene, par
 		return true;
 	}
 	
-	if (parts.size() > 1)
+	if (parts.size() > 1  && type != CHANGE)
 		parent_name = parts[1];
 	
 	int start = 1;
 	
-	if (parts.size() > 1)
+	if (parts.size() > 1 && type != CHANGE)
 		start = 2;
 	
 	for (unsigned int i = start;i < parts.size();i++)
 	{
-		for (;i < parts.size() && (parts[i].size() != 1 || (parts[i].size() == 1 && isdigit(parts[i][0])));i++);
+		for (;i < parts.size();i++)
+		{
+			if (parts[i].size() == 1 && !isdigit(parts[i][0]))
+				break;
+		}
 		
 		if (i == parts.size())
 			break;
