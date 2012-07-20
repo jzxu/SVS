@@ -143,7 +143,7 @@ inline bool get_filter_val<float>(const filter_val *fv, float &v) {
 	}
 	
 	if (ifv = dynamic_cast<const filter_val_c<int>*>(fv)) {
-		v = ifv->get_value();
+		v = float(ifv->get_value());
 		return true;
 	}
 	

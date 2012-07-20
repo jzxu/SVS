@@ -4,13 +4,13 @@
 #include "linalg.h"
 
 const float wheel_diameter     = 0.25;
-const float baseline           = 0.35;
+const float baseline           = float(0.35);
 const float torque_constant    = 3.0; // torque (Nm) per amp
 const float emf_constant       = 2.0; // volts per rad_per_sec
 const float winding_resistance = 5.5; // ohms
 const float inertia            = 0.5; // kg*m^2
 const float drag_constant      = 1.0; // drag (Nm per rad_per_sec) ( >= 0)
-const float dt                 = 0.016; // need a better way to figure this out
+const float dt                 = float(0.016); // need a better way to figure this out
 
 inline void calc_rps(float &rps, float input_volts) {
 	float volts_emf = rps * emf_constant;

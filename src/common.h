@@ -34,7 +34,27 @@ std::ofstream& get_datavis();
 #endif
 
 #ifdef _WIN32
-#define INFINITY 0xffffffff
+
+#ifndef NAN
+static const unsigned long __nan[2] = {0xffffffff, 0x7fffffff};
+#define NAN (*(const float *) __nan)
+#endif
+
+#ifndef INFINITY
+union MSVC_EVIL_FLOAT_HACK
+{
+	unsigned __int8 Bytes[4];
+	float Value;
+};
+static union MSVC_EVIL_FLOAT_HACK INFINITY_HACK = {{0x00, 0x00, 0x80, 0x7F}};
+#define INFINITY (INFINITY_HACK.Value)
+#endif
+
+#undef isnan
+#undef isinf
+
+#define isnan(x) (x != x)
+#define isinf(x) (!isnan(x) && isnan(x-x))
 
 #include <io.h>
 
@@ -43,13 +63,8 @@ const int R_OK = 4;
 
 #define access _access
 
-#ifdef min
 #undef min
-#endif
-
-#ifdef max
 #undef max
-#endif
 
 #endif
 

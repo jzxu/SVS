@@ -67,6 +67,7 @@ vec3 sgnode::get_trans(char type) const {
 		default:
 			assert (false);
 	}
+	return vec3();
 }
 
 void sgnode::get_trans(vec3 &p, vec3 &r, vec3 &s) const {

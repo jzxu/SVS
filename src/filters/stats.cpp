@@ -44,6 +44,7 @@ private:
 			}
 		}
 		assert(false);
+		return false;
 	}
 
 	bool input_removed(const filter_param_set *params, double &res) {
@@ -57,6 +58,7 @@ private:
 			}
 		}
 		assert(false);
+		return false;
 	}
 
 	vector<pair<double, const filter_param_set*> > elems;
