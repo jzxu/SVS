@@ -1,3 +1,5 @@
+#include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <fstream>
 #include <cstdlib>
@@ -109,18 +111,17 @@ bool model::cli_inspect(int first_arg, const vector<string> &args, ostream &os) 
 	return cli_inspect_sub(first_arg, args, os);
 }
 
-multi_model::multi_model() {
-}
+multi_model::multi_model(map<string, model*> *model_db) : model_db(model_db) {}
 
 multi_model::~multi_model() {
-	list<model_config*>::iterator i;
+	std::list<model_config*>::iterator i;
 	for (i = active_models.begin(); i != active_models.end(); ++i) {
 		delete *i;
 	}
 }
 
 bool multi_model::predict(const rvec &x, rvec &y) {
-	list<model_config*>::const_iterator i;
+	std::list<model_config*>::const_iterator i;
 	for (i = active_models.begin(); i != active_models.end(); ++i) {
 		model_config *cfg = *i;
 		DATAVIS("BEGIN '" << cfg->name << "'" << endl)
@@ -149,7 +150,7 @@ bool multi_model::predict(const rvec &x, rvec &y) {
 }
 
 void multi_model::learn(const rvec &x, const rvec &y) {
-	list<model_config*>::iterator i;
+	std::list<model_config*>::iterator i;
 	int j;
 	for (i = active_models.begin(); i != active_models.end(); ++i) {
 		model_config *cfg = *i;
@@ -171,36 +172,15 @@ void multi_model::learn(const rvec &x, const rvec &y) {
 }
 
 float multi_model::test(const rvec &x, const rvec &y) {
-	float s = 0.0;
-	list<model_config*>::iterator i;
-	for (i = active_models.begin(); i != active_models.end(); ++i) {
-		model_config *cfg = *i;
-		DATAVIS("BEGIN '" << cfg->name << "'" << endl)
-		rvec xp, yp;
-		if (cfg->allx) {
-			xp = x;
-		} else {
-			slice(x, xp, cfg->xinds);
-		}
-		if (cfg->ally) {
-			yp = y;
-		} else {
-			slice(y, yp, cfg->yinds);
-		}
-		float d = cfg->mdl->test(xp, yp);
-		if (d < 0.) {
-			DATAVIS("'pred error' 'no prediction'" << endl)
-			s = -1.;
-		} else if (s >= 0.) {
-			DATAVIS("'pred error' " << d << endl)
-			s += d;
-		}
-		DATAVIS("END" << endl)
+	rvec predicted(y.size());
+	predicted.setConstant(0.0);
+	reference_vals.push_back(y);
+	if (!predict(x, predicted)) {
+		predicted_vals.push_back(rvec());
+		return INFINITY;
 	}
-	if (s >= 0.) {
-		return s / active_models.size();
-	}
-	return -1.;
+	predicted_vals.push_back(predicted);
+	return (y - predicted).squaredNorm();
 }
 
 string multi_model::assign_model
@@ -210,7 +190,7 @@ string multi_model::assign_model
 {
 	model *m;
 	model_config *cfg;
-	if (!map_get(model_db, name, m)) {
+	if (!map_get(*model_db, name, m)) {
 		return "no model";
 	}
 	
@@ -253,7 +233,7 @@ string multi_model::assign_model
 }
 
 void multi_model::unassign_model(const string &name) {
-	list<model_config*>::iterator i;
+	std::list<model_config*>::iterator i;
 	for (i = active_models.begin(); i != active_models.end(); ++i) {
 		if ((**i).name == name) {
 			active_models.erase(i);
@@ -276,20 +256,143 @@ bool multi_model::find_indexes(const vector<string> &props, vector<int> &indexes
 	return true;
 }
 
-bool multi_model::cli_inspect(int first_arg, const vector<string> &args, ostream &os) const {
-	map<string, model*>::const_iterator i;
-	if (first_arg >= args.size()) {
-		os << "Current models:" << endl;
-		for (i = model_db.begin(); i != model_db.end(); ++i) {
-			os << i->first << endl;
-		}
-		return true;
-	}
-	i = model_db.find(args[first_arg]);
-	if (i == model_db.end()) {
-		os << "no such model" << endl;
+bool multi_model::report_error(int i, const vector<string> &args, ostream &os) const {
+	if (reference_vals.empty()) {
+		os << "no model error data" << endl;
 		return false;
 	}
-	return i->second->cli_inspect(first_arg + 1, args, os);
+	
+	int dim = -1, start = 0, end = reference_vals.size() - 1;
+	bool list = false;
+	if (i >= args.size()) {
+		os << "specify a dimension" << endl;
+		return false;
+	}
+	if (args[i] == "list") {
+		list = true;
+		++i;
+	}
+	if (!parse_int(args[i], dim)) {
+		dim = -1;
+		for (int j = 0; j < prop_vec.size(); ++j) {
+			if (prop_vec[j] == args[i]) {
+				dim = j;
+				break;
+			}
+		}
+	}
+	if (dim < 0) {
+		os << "invalid dimension" << endl;
+		return false;
+	}
+	if (++i < args.size()) {
+		if (!parse_int(args[i], start)) {
+			os << "require integer start time" << endl;
+			return false;
+		}
+		if (start < 0 || start >= reference_vals.size()) {
+			os << "start time must be in [0, " << reference_vals.size() - 1 << "]" << endl;
+			return false;
+		}
+	}
+	if (++i < args.size()) {
+		if (!parse_int(args[i], end)) {
+			os << "require integer end time" << endl;
+			return false;
+		}
+		if (end <= start || end >= reference_vals.size()) {
+			os << "end time must be in [start time, " << reference_vals.size() - 1 << "]" << endl;
+			return false;
+		}
+	}
+	
+	if (list) {
+		for (int j = start; j <= end; ++j) {
+			os << setw(4) << j << "\t";
+			if (dim >= reference_vals[j].size() || dim >= predicted_vals[j].size()) {
+				os << "NA\tNA" << endl;
+			} else {
+				os << reference_vals[j](dim) << "\t" << predicted_vals[j](dim) << endl;
+			}
+		}
+	} else {
+		double mean, std, min, max;
+		error_stats_by_dim(dim, start, end, mean, std, min, max);
+		os << "mean " << mean << endl
+		   << "std  " << std << endl
+		   << "min  " << min << endl
+		   << "max  " << max << endl;
+	}
+	return true;
 }
 
+void multi_model::error_stats_by_dim(int dim, int start, int end, double &mean, double &std, double &min, double &max) const {
+	assert(dim >= 0 && start >= 0 && end <= reference_vals.size());
+	double total = 0.0;
+	min = INFINITY; 
+	max = 0.0;
+	std = 0.0;
+	vector<double> ds;
+	for (int i = start; i <= end; ++i) {
+		if (dim >= reference_vals[i].size() || dim >= predicted_vals[i].size()) {
+			continue;
+		}
+		double r = reference_vals[i](dim);
+		double p = predicted_vals[i](dim);
+		double d = fabs(r - p);
+		ds.push_back(d);
+		total += d;
+		if (d < min) {
+			min = d;
+		}
+		if (d > max) {
+			max = d;
+		}
+	}
+	mean = total / ds.size();
+	for (int i = 0; i < ds.size(); ++i) {
+		std += pow(ds[i] - mean, 2);
+	}
+	std = sqrt(std / ds.size());
+}
+
+void multi_model::report_model_config(model_config* c, ostream &os) const {
+	const char *indent = "  ";
+	os << c->name << endl;
+	if (c->allx) {
+		os << indent << "xdims: all" << endl;
+	} else {
+		os << indent << "xdims: ";
+		for (int i = 0; i < c->xprops.size(); ++i) {
+			os << c->xprops[i] << " ";
+		}
+		os << endl;
+	}
+	if (c->ally) {
+		os << indent << "ydims: all" << endl;
+	} else {
+		os << indent << "ydims: ";
+		for (int i = 0; i < c->yprops.size(); ++i) {
+			os << c->yprops[i] << " ";
+		}
+		os << endl;
+	}
+}
+
+bool multi_model::cli_inspect(int i, const vector<string> &args, ostream &os) const {
+	if (i >= args.size()) {
+		os << "available subqueries are: assignment error" << endl;
+		return false;
+	}
+	if (args[i] == "assignment") {
+		std::list<model_config*>::const_iterator j;
+		for (j = active_models.begin(); j != active_models.end(); ++j) {
+			report_model_config(*j, os);
+		}
+		return true;
+	} else if (args[i] == "error") {
+		return report_error(++i, args, os);
+	}
+	os << "no such query" << endl;
+	return false;
+}
