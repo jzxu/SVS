@@ -19,30 +19,17 @@ void slice(const rvec &source, rvec &target, const vector<int> &indexes) {
 	}
 }
 
-model::model(const std::string &name, const std::string &type) 
-: name(name), type(type)
-{
-	stringstream ss;
-	ss << MODEL_DIR << "/" << name << "." << type;
-	path = ss.str();
-	
-	if (!get_option("log_predictions").empty()) {
-		ss.str("");
-		ss << PREDICTION_DIR << "/" << name << "." << type;
-		string p = ss.str();
-		predlog.open(p.c_str(), ios_base::app);
+void dassign(const rvec &source, rvec &target, const vector<int> &indexes) {
+	assert(source.size() == indexes.size());
+	for (int i = 0; i < indexes.size(); ++i) {
+		assert(0 <= indexes[i] && indexes[i] < target.size());
+		target[indexes[i]] = source[i];
 	}
 }
 
-void model::finish() {
-	if (!get_option("save_models").empty()) {
-		ofstream os(path.c_str());
-		if (os.is_open()) {
-			save(os);
-			os.close();
-		}
-	}
-}
+model::model(const std::string &name, const std::string &type) 
+: name(name), type(type)
+{}
 
 void model::init() {
 	ifstream is(path.c_str());
@@ -51,32 +38,16 @@ void model::init() {
 	}
 }
 
-float model::test(const rvec &x, const rvec &y) {
-	rvec py(y.size());
-	float error;
-	if (!predict(x, py)) {
-		error = numeric_limits<double>::signaling_NaN();
-	} else {
-		error = (py - y).norm();
+bool model::test(const rvec &x, const rvec &y, const boolvec &atoms, rvec &prediction) {
+	if (!predict(x, prediction, atoms)) {
+		return false;
 	}
-	
-	if (predlog.is_open()) {
-		predlog << x << " ; " << y << " ; " << py << " ; " << error << endl;
-	}
-	
-	last_pred = py;
-	last_ref = y;
-	return error;
+	return true;
 }
 
 bool model::cli_inspect(int first_arg, const vector<string> &args, ostream &os) {
 	if (first_arg < args.size()) {
-		if (args[first_arg] == "error") {
-			os << "last predicted: " << last_pred << endl;
-			os << "last reference: " << last_ref << endl;
-			os << "squared error:  " << (last_pred - last_ref).squaredNorm() << endl;
-			return true;
-		} else if (args[first_arg] == "save") {
+		if (args[first_arg] == "save") {
 			if (first_arg + 1 >= args.size()) {
 				os << "need a file name" << endl;
 				return false;
@@ -120,36 +91,30 @@ multi_model::~multi_model() {
 	}
 }
 
-bool multi_model::predict(const rvec &x, rvec &y) {
+bool multi_model::predict(const rvec &x, rvec &y, const boolvec &atoms) {
 	std::list<model_config*>::const_iterator i;
 	for (i = active_models.begin(); i != active_models.end(); ++i) {
 		model_config *cfg = *i;
-		DATAVIS("BEGIN '" << cfg->name << "'" << endl)
-		rvec yp(cfg->ally ? y.size() : cfg->yinds.size());
+		rvec xp, yp(cfg->ally ? y.size() : cfg->yinds.size());
 		bool success;
 		if (cfg->allx) {
-			success = cfg->mdl->predict(x, yp);
+			xp = x;
 		} else {
-			rvec x1;
-			slice(x, x1,  cfg->xinds);
-			success = cfg->mdl->predict(x1, yp);
+			slice(x, xp, cfg->xinds);
 		}
-		if (!success) {
+		if (!cfg->mdl->predict(xp, yp, atoms)) {
 			return false;
 		}
 		if (cfg->ally) {
 			y = yp;
 		} else {
-			for (int j = 0; j < cfg->yinds.size(); ++j) {
-				y[cfg->yinds[j]] = yp[j];
-			}
+			dassign(yp, y, cfg->yinds);
 		}
-		DATAVIS("END" << endl)
 	}
 	return true;
 }
 
-void multi_model::learn(const rvec &x, const rvec &y) {
+void multi_model::learn(const rvec &x, const rvec &y, const boolvec &atoms) {
 	std::list<model_config*>::iterator i;
 	int j;
 	for (i = active_models.begin(); i != active_models.end(); ++i) {
@@ -165,22 +130,51 @@ void multi_model::learn(const rvec &x, const rvec &y) {
 		} else {
 			slice(y, yp, cfg->yinds);
 		}
-		DATAVIS("BEGIN '" << cfg->name << "'" << endl)
-		cfg->mdl->learn(xp, yp);
-		DATAVIS("END" << endl)
+		cfg->mdl->learn(xp, yp, atoms);
 	}
 }
 
-float multi_model::test(const rvec &x, const rvec &y) {
+bool multi_model::test(const rvec &x, const rvec &y, const boolvec &atoms) {
 	rvec predicted(y.size());
 	predicted.setConstant(0.0);
+	test_x.push_back(x);
+	test_y.push_back(y);
+	test_atoms.push_back(atoms);
 	reference_vals.push_back(y);
-	if (!predict(x, predicted)) {
+
+	bool failed = false;
+	std::list<model_config*>::const_iterator i;
+	for (i = active_models.begin(); i != active_models.end(); ++i) {
+		model_config *cfg = *i;
+		rvec xp, yp, p(cfg->ally ? y.size() : cfg->yinds.size());
+		bool success;
+		if (cfg->allx) {
+			xp = x;
+		} else {
+			slice(x, xp, cfg->xinds);
+		}
+		if (cfg->ally) {
+			yp = y;
+		} else {
+			slice(y, yp, cfg->yinds);
+		}
+		if (!cfg->mdl->test(xp, yp, atoms, p)) {
+			failed = true;
+			break;
+		}
+		if (cfg->ally) {
+			predicted = p;
+		} else {
+			dassign(p, predicted, cfg->yinds);
+		}
+	}
+
+	if (failed) {
 		predicted_vals.push_back(rvec());
-		return INFINITY;
+		return false;
 	}
 	predicted_vals.push_back(predicted);
-	return (y - predicted).squaredNorm();
+	return true;
 }
 
 string multi_model::assign_model
@@ -263,14 +257,17 @@ bool multi_model::report_error(int i, const vector<string> &args, ostream &os) c
 	}
 	
 	int dim = -1, start = 0, end = reference_vals.size() - 1;
-	bool list = false;
-	if (i >= args.size()) {
-		os << "specify a dimension" << endl;
-		return false;
-	}
+	bool list = false, histo = false;
 	if (args[i] == "list") {
 		list = true;
 		++i;
+	} else if (args[i] == "histogram") {
+		histo = true;
+		++i;
+	}
+	if (i >= args.size()) {
+		os << "specify a dimension" << endl;
+		return false;
 	}
 	if (!parse_int(args[i], dim)) {
 		dim = -1;
@@ -307,26 +304,54 @@ bool multi_model::report_error(int i, const vector<string> &args, ostream &os) c
 	}
 	
 	if (list) {
+		os << "num real pred error null norm" << endl;
 		for (int j = start; j <= end; ++j) {
-			os << setw(4) << j << "\t";
+			os << setw(4) << j << " ";
 			if (dim >= reference_vals[j].size() || dim >= predicted_vals[j].size()) {
-				os << "NA\tNA" << endl;
+				os << "NA" << endl;
 			} else {
-				os << reference_vals[j](dim) << "\t" << predicted_vals[j](dim) << endl;
+				double error, null_error, norm_error;
+				error = fabs(reference_vals[j](dim) - predicted_vals[j](dim));
+				if (j > 0 && (null_error = fabs(reference_vals[j-1](dim) - reference_vals[j](dim))) > 0) {
+					norm_error = error / null_error;
+				} else {
+					null_error = -1;
+					norm_error = -1;
+				}
+				os << reference_vals[j](dim) << " " << predicted_vals[j](dim) << " " 
+				   << error << " ";
+				if (null_error < 0) {
+					os << "NA ";
+				} else {
+					os << null_error << " ";
+				}
+				if (norm_error < 0) {
+					os << "NA";
+				} else {
+					os << norm_error;
+				}
+				os << endl;
 			}
 		}
+	} else if (histo) {
+		vector<double> errors;
+		for (int j = start; j <= end; ++j) {
+			errors.push_back(fabs(reference_vals[j](dim) - predicted_vals[j](dim)));
+		}
+		histogram(errors, 10, os) << endl;
 	} else {
-		double mean, std, min, max;
-		error_stats_by_dim(dim, start, end, mean, std, min, max);
+		double mean, mode, std, min, max;
+		error_stats_by_dim(dim, start, end, mean, mode, std, min, max);
 		os << "mean " << mean << endl
 		   << "std  " << std << endl
+		   << "mode " << mode << endl
 		   << "min  " << min << endl
 		   << "max  " << max << endl;
 	}
 	return true;
 }
 
-void multi_model::error_stats_by_dim(int dim, int start, int end, double &mean, double &std, double &min, double &max) const {
+void multi_model::error_stats_by_dim(int dim, int start, int end, double &mean, double &mode, double &std, double &min, double &max) const {
 	assert(dim >= 0 && start >= 0 && end <= reference_vals.size());
 	double total = 0.0;
 	min = INFINITY; 
@@ -354,6 +379,8 @@ void multi_model::error_stats_by_dim(int dim, int start, int end, double &mean, 
 		std += pow(ds[i] - mean, 2);
 	}
 	std = sqrt(std / ds.size());
+	sort(ds.begin(), ds.end());
+	mode = ds[ds.size() / 2];
 }
 
 void multi_model::report_model_config(model_config* c, ostream &os) const {

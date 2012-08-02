@@ -11,6 +11,9 @@
 #include "portability.h"
 #endif
 
+#include <string.h>
+#include <strings.h>
+
 #include <iostream>
 #include <sstream>
 #include <string>

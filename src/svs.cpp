@@ -222,6 +222,7 @@ void svs_state::update_models() {
 	vector<string> curr_pnames, out_names;
 	output_spec::const_iterator i;
 	rvec curr_pvals, out;
+	boolvec curr_atoms;
 	
 	if (level > 0) {
 		/* No legitimate information to learn from imagined states */
@@ -243,10 +244,10 @@ void svs_state::update_models() {
 			x = prev_pvals;
 		}
 		if (test_models) {
-			mmdl->test(x, curr_pvals);
+			mmdl->test(x, curr_pvals, prev_atoms);
 		}
 		if (learn_models) {
-			mmdl->learn(x, curr_pvals);
+			mmdl->learn(x, curr_pvals, prev_atoms);
 		}
 	} else {
 		mmdl->set_property_vector(curr_pnames);
@@ -258,6 +259,7 @@ void svs_state::update_models() {
 	}
 	prev_pnames = curr_pnames;
 	prev_pvals = curr_pvals;
+	prev_atoms = scn->get_atom_vals();
 }
 
 void svs_state::set_output(const rvec &out) {
@@ -318,10 +320,18 @@ bool svs_state::cli_inspect(int first_arg, const vector<string> &args, ostream &
 		}
 		return true;
 	} else if (args[first_arg] == "atoms") {
-		vector<string> atoms;
-		get_filter_table().get_all_atoms(scn, atoms);
-		for (int i = 0; i < atoms.size(); ++i) {
-			os << setw(3) << i << " " << atoms[i] << endl;
+		vector<string> atom_names;
+		boolvec atom_vals;
+		get_filter_table().get_all_atoms(scn, atom_names);
+		get_filter_table().calc_all_atoms(scn, atom_vals);
+		assert(atom_names.size() == atom_vals.size());
+		
+		int longest = 0;
+		for (int i = 0; i < atom_names.size(); ++i) {
+			longest = std::max(static_cast<int>(atom_names[i].size()), longest);
+		}
+		for (int i = 0; i < atom_names.size(); ++i) {
+			os << setw(3) << i << " " << setw(longest) << left << atom_names[i] << " " << atom_vals[i] << endl;
 		}
 		return true;
 	} else if (args[first_arg] == "timing") {
