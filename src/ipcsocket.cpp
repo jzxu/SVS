@@ -11,8 +11,7 @@
 #include "portability.h"
 #endif
 
-#include <string.h>
-#include <strings.h>
+#include <cstring>
 
 #include <iostream>
 #include <sstream>
@@ -41,7 +40,7 @@ bool ipcsocket::connect(const string &path) {
 	socklen_t len;
 	struct sockaddr_un addr;
 	
-	bzero((char *) &addr, sizeof(addr));
+	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strcpy(addr.sun_path, path.c_str());
 	len = strlen(addr.sun_path) + sizeof(addr.sun_family) + 1;
