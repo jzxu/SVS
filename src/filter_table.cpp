@@ -37,6 +37,10 @@ filter_table_entry *vec3_fill_entry();
 filter_table_entry *max_fill_entry();
 filter_table_entry *closest_fill_entry();
 
+filter_table_entry *robot_driving_fill_entry();
+filter_table_entry *robot_turning_right_fill_entry();
+filter_table_entry *robot_turning_left_fill_entry();
+
 filter_table::filter_table() {
 	add(intersect_fill_entry());
 	add(distance_fill_entry());
@@ -65,6 +69,10 @@ filter_table::filter_table() {
 	add(vec3_fill_entry());
 	add(max_fill_entry());
 	add(closest_fill_entry());
+	
+	add(robot_driving_fill_entry());
+	add(robot_turning_right_fill_entry());
+	add(robot_turning_left_fill_entry());
 }
 
 void filter_table::proxy_get_children(map<string, cliproxy*> &c) {

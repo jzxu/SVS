@@ -31,6 +31,7 @@
 #include "src/filters/ptlist.cpp"
 #include "src/filters/stats.cpp"
 #include "src/filters/vec3.cpp"
+#include "src/filters/domain_specific.cpp"
 
 #include "src/cliproxy.cpp"
 #include "src/command.cpp"
