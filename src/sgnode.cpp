@@ -123,12 +123,12 @@ void sgnode::update_transform() const {
 
 /* if updates result in observers removing themselves, the iteration may
  * screw up, so make a copy of the std::list first */
-void sgnode::send_update(sgnode::change_type t, int added) {
+void sgnode::send_update(sgnode::change_type t, const std::string& update_info) {
 	std::list<sgnode_listener*>::iterator i;
 	std::list<sgnode_listener*> c;
 	std::copy(listeners.begin(), listeners.end(), back_inserter(c));
 	for (i = c.begin(); i != c.end(); ++i) {
-		(**i).node_update(this, t, added);
+		(**i).node_update(this, t, update_info);
 	}
 }
 
@@ -179,6 +179,8 @@ const group_node *sgnode::as_group() const {
 sgnode *sgnode::clone() const {
 	sgnode *c = clone_sub();
 	c->set_trans(pos, rot, scale);
+	c->string_props = string_props;
+	c->numeric_props = numeric_props;
 	return c;
 }
 
@@ -193,7 +195,7 @@ bool sgnode::has_descendent(const sgnode *n) const {
 void sgnode::proxy_use_sub(const vector<string> &args, ostream &os) {
 	vec3 lp, ls, wp, ws;
 	vec4 lr, wr;
-	table_printer t, t1, t2;
+	table_printer t, t1, t2, t3;
 	
 	t.add_row() << "id:"     << id;
 	t.add_row() << "name:"   << name;
@@ -234,6 +236,17 @@ void sgnode::proxy_use_sub(const vector<string> &args, ostream &os) {
 	}
 	t2.print(os);
 
+	numeric_properties_map::const_iterator ni, ni_end;
+	string_properties_map::const_iterator si, si_end;
+	
+	os << endl << "Custom properties:" << endl;
+	for (ni = numeric_props.begin(), ni_end = numeric_props.end(); ni != ni_end; ++ni) {
+		t3.add_row() << ni->first << ni->second;
+	}
+	for (si = string_props.begin(), si_end = string_props.end(); si != si_end; ++si) {
+		t3.add_row() << si->first << si->second;
+	}
+	t3.print(os);
 }
 
 group_node::~group_node() {
@@ -294,7 +307,8 @@ bool group_node::attach_child(sgnode *c) {
 	c->parent = this;
 	c->set_transform_dirty();
 	set_shape_dirty();
-	send_update(sgnode::CHILD_ADDED, children.size() - 1);
+	std::string added_num = tostring(children.size() - 1);
+	send_update(sgnode::CHILD_ADDED, added_num);
 	
 	return true;
 }
@@ -572,4 +586,32 @@ bool intersects(const sgnode *n1, const sgnode *n2) {
 		return convex_distance(n1, n2) < INTERSECT_THRESH;
 	}
 	return false;
+}
+
+void sgnode::set_property(const std::string& propertyName, const std::string& value){
+	double numericValue;
+	if(parse_double(value, numericValue)){
+		numeric_props[propertyName] = numericValue;
+	} else {
+		string_props[propertyName] = value;
+	}
+	send_update(sgnode::PROPERTY_CHANGED, propertyName);
+}
+
+void sgnode::set_property(const std::string& propertyName, double value){
+	numeric_props[propertyName] = value;
+	send_update(sgnode::PROPERTY_CHANGED, propertyName);
+}
+
+void sgnode::delete_property(const std::string& propertyName){
+	bool deleted = false;
+	if(numeric_props.erase(propertyName) > 0){
+		deleted = true;
+	}
+	if(string_props.erase(propertyName) > 0){
+		deleted = true;
+	}
+	if(deleted){
+		send_update(sgnode::PROPERTY_DELETED, propertyName);
+	}
 }
