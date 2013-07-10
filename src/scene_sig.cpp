@@ -66,6 +66,25 @@ void scene_sig::print(ostream &os) const {
 	t.print(os);
 }
 
+void scene_sig::print_with_vals(const rvec &x, ostream &os) const {
+	table_printer t;
+	int k = 0;
+	assert(x.size() == dim());
+	for (int i = 0, iend = s.size(); i < iend; ++i) {
+		const entry &e = s[i];
+		for (int j = 0, jend = e.props.size(); j < jend; ++j) {
+			t.add_row() << k;
+			if (j == 0) {
+				t << e.name;
+			} else {
+				t << "";
+			}
+			t << e.props[j] << x(k++);
+		}
+	}
+	t.print(os);
+}
+
 void scene_sig::add(const scene_sig::entry &e) {
 	int curr_dim = dim();
 	s.push_back(e);

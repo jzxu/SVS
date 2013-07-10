@@ -126,15 +126,27 @@ void draw_predictions(drawer *d, int mode, int nmodes, double pred, double real,
 class EM_model : public model {
 public:
 	EM_model(svs *owner, const string &name)
-	: model(name, "em", true), em(get_data(), owner->get_loggers())
+	: model(name, "em"), em(get_data(), owner->get_loggers())
 	{
 		draw = owner->get_drawer();
 	}
 
-	bool predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, rvec &y)  {
+	bool predict_sub(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, bool test, rvec &y, map<string, rvec> &info)  {
 		int mode;
-		bool success = em.predict(target, sig, rels, x, mode, y(0));
-		return success;
+		double real_y;
+		rvec mode_info(3);
+		
+		real_y = y(0);
+		if (!em.predict(target, sig, rels, x, mode, y(0))) {
+			return false;
+		}
+		mode_info(0) = mode;
+		if (test) {
+			mode_info(1) = em.best_mode(target, sig, x, real_y, mode_info(2));
+		}
+		info["mode"] = mode_info;
+		draw_predictions(draw, mode, em.num_modes(), y(0), real_y, get_name(), &em);
+		return true;
 	}
 	
 	int get_input_size() const {
@@ -151,80 +163,15 @@ public:
 		em.run(MAXITERS);
 	}
 	
-	/*
-	 In addition to just calculating prediction error, I also want
-	 to check whether classification was correct.
-	*/
-	void test(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, const rvec &y) {
-		rvec yp;
-		bool success;
-		
-		test_info &ti = grow_vec(test_rec);
-		ti.x = x;
-		ti.y = y(0);
-		extend_relations(test_rels, rels, test_rec.size() - 1);
-		success = em.predict(target, sig, rels, x, ti.mode, ti.pred);
-		ti.best_mode = em.best_mode(target, sig, x, y(0), ti.best_error);
-		draw_predictions(draw, ti.mode, em.num_modes(), ti.pred, y(0), get_name(), &em);
-	}
-	
 	void proxy_get_children(map<string, cliproxy*> &c) {
 		model::proxy_get_children(c);
 		c["em"] = &em;
-		c["error"] = new memfunc_proxy<EM_model>(this, &EM_model::cli_error);
-		c["tests"] = new memfunc_proxy<EM_model>(this, &EM_model::cli_tests);
-		c["test_rels"] = new memfunc_proxy<EM_model>(this, &EM_model::cli_test_rels);
 	}
-	
-	void cli_error(ostream &os) const {
-		int correct = 0, incorrect = 0;
-		table_printer t;
-		t.add_row() << "N" << "REAL" << "PRED" << "ERROR" << "MODE" << "BESTMODE" << "BESTERROR";
-		for (int i = 0, iend = test_rec.size(); i < iend; ++i) {
-			const test_info &ti = test_rec[i];
-			if (ti.mode == ti.best_mode && ti.best_mode != 0) {
-				++correct;
-			} else {
-				++incorrect;
-			}
-			t.add_row() << i << ti.y << ti.pred << ti.pred - ti.y << ti.mode << ti.best_mode << ti.best_error;
-		}
-		t.print(os);
-		os << correct << " correct, " << incorrect << " incorrect" << endl;
-	}
-	
-	void cli_tests(ostream &os) const {
-		for (int i = 0, iend = test_rec.size(); i < iend; ++i) {
-			const test_info &ti = test_rec[i];
-			for (int j = 0, jend = ti.x.size(); j < jend; ++j) {
-				os << ti.x(j) << ' ';
-			}
-			os << ti.y << endl;
-		}
-	}
-	
-	void cli_test_rels(ostream &os) const {
-		serializer(os) << test_rels << '\n';
-	}
-	
 	
 private:
-	struct test_info {
-		scene_sig sig;
-		rvec x;
-		double y;
-		double pred;
-		double best_error;
-		int mode;
-		int best_mode;
-	};
-	
 	EM em;
 	drawer *draw;
 	
-	vector<test_info> test_rec;
-	relation_table test_rels;
-
 	void serialize_sub(ostream &os) const {
 		em.serialize(os);
 	}

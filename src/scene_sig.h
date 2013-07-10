@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include "mat.h"
 #include "serializable.h"
 
 class scene_sig : public serializable {
@@ -47,6 +48,7 @@ public:
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
 	void print(std::ostream &os) const;
+	void print_with_vals(const rvec &x, std::ostream &os) const;
 	int dim() const;
 	void add(const entry &e);
 	bool get_dim(const std::string &obj, const std::string &prop, int &obj_ind, int &prop_ind) const;

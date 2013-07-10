@@ -9,7 +9,7 @@ using namespace Eigen;
 class lwr_model : public model {
 public:
 	lwr_model(int nnbrs, double noise_var, const string &name)
-	: model(name, "lwr", true), lwr(nnbrs, noise_var, true)
+	: model(name, "lwr"), lwr(nnbrs, noise_var, true)
 	{}
 	
 	void update() {
@@ -17,7 +17,7 @@ public:
 		lwr.learn(i.x, i.y);
 	}
 	
-	bool predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, rvec &y) {
+	bool predict_sub(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, bool test, rvec &y, map<string,rvec> &info) {
 		return lwr.predict(x, y);
 	}
 	

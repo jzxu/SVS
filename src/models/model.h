@@ -59,7 +59,7 @@ private:
 
 class model : public serializable, public cliproxy {
 public:
-	model(const std::string &name, const std::string &type, bool learning);
+	model(const std::string &name, const std::string &type);
 	virtual ~model() {}
 	
 	std::string get_name() const { return name; }
@@ -67,20 +67,34 @@ public:
 	const model_train_data &get_data() const { return train_data; }
 	
 	void learn(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, const rvec &y);
+	bool predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, bool test, rvec &y);
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
 	
-	virtual bool predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, rvec &y) = 0;
 	virtual int get_input_size() const = 0;
 	virtual int get_output_size() const = 0;
-	virtual void test(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, const rvec &y) {};
 
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	
 private:
+	virtual bool predict_sub(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, bool test, rvec &y, std::map<std::string, rvec> &pinfo) = 0;
+	
+	struct prediction_info {
+		int target;
+		scene_sig sig;
+		rvec x;
+		double real_y;
+		double pred_y;
+		double error;
+		bool tested;
+		bool success;
+		relation_table rel_state;
+		std::map<std::string, rvec> model_specifics;
+	};
+	
 	std::string name, type;
-	bool learning;
 	model_train_data train_data;
+	std::vector<prediction_info*> predictions;
 
 	virtual void update() {}
 	virtual void serialize_sub(std::ostream &os) const {}
@@ -88,6 +102,7 @@ private:
 
 	void cli_save(const std::vector<std::string> &args, std::ostream &os);
 	void cli_load(const std::vector<std::string> &args, std::ostream &os);
+	void cli_predictions(const std::vector<std::string> &args, std::ostream &os);
 };
 
 /*

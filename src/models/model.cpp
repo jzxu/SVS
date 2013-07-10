@@ -77,20 +77,42 @@ bool split_props(const string &unsplit, multi_model::obj_prop &out) {
 	return true;
 }
 
-model::model(const std::string &name, const std::string &type, bool learning) 
-: name(name), type(type), learning(learning)
+model::model(const std::string &name, const std::string &type) 
+: name(name), type(type)
 {}
 
 void model::learn(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, const rvec &y) {
-	if (learning) {
-		train_data.add(target, sig, rels, x, y);
-		update();
+	train_data.add(target, sig, rels, x, y);
+	update();
+}
+
+bool model::predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, bool test, rvec &y) {
+	prediction_info *info = new prediction_info;
+	
+	info->target = target;
+	info->sig = sig;
+	info->x = x;
+	info->rel_state = rels;
+	info->tested = test;
+	if (test) {
+		info->real_y = y(0);
 	}
+	
+	info->success = predict_sub(target, sig, rels, x, test, y, info->model_specifics);
+	if (info->success) {
+		info->pred_y = y(0);
+		if (test) {
+			info->error = info->real_y - info->pred_y;
+		}
+	}
+	predictions.push_back(info);
+	return info->success;
 }
 
 void model::proxy_get_children(map<string, cliproxy*> &c) {
 	c["save"] = new memfunc_proxy<model>(this, &model::cli_save);
 	c["load"] = new memfunc_proxy<model>(this, &model::cli_load);
+	c["predictions"] = new memfunc_proxy<model>(this, &model::cli_predictions);
 	c["data"] = &train_data;
 }
 
@@ -128,15 +150,83 @@ void model::cli_load(const vector<string> &args, ostream &os) {
 	os << "loaded from " << path << endl;
 }
 
+void model::cli_predictions(const vector<string> &args, ostream &os) {
+	table_printer t;
+	
+	if (!args.empty()) {
+		int i;
+		if (parse_int(args[0], i)) {
+			// print all details of a single prediction
+			
+			if (i < 0 || i >= predictions.size()) {
+				os << "no such prediction" << endl;
+				return;
+			}
+			prediction_info *info = predictions[i];
+			t.add_row() << "target"  << info->target;
+			t.add_row() << "pred"    << info->pred_y;
+			t.add_row() << "real"    << info->real_y;
+			t.add_row() << "error"   << info->error;
+			t.add_row() << "tested"  << info->tested;
+			t.add_row() << "success" << info->success;
+			t.print(os);
+			os << endl;
+			os << "* Continuous state" << endl;
+			info->sig.print_with_vals(info->x, os);
+			
+			os << "* Relations" << endl << info->rel_state << endl;
+			
+			os << "* Model specific" << endl;
+			table_printer t2;
+			map<string, rvec>::const_iterator j, jend;
+			for (j = info->model_specifics.begin(), jend = info->model_specifics.end(); j != jend; ++j) {
+				t2.add_row() << j->first;
+				for (int k = 0, kend = j->second.size(); k < kend; ++k) {
+					t2 << j->second(k);
+				}
+			}
+			t2.print(os);
+		} else {
+			// print one model specific attribute for all predictions
+			for (int i = 0, iend = predictions.size(); i < iend; ++i) {
+				rvec *p = map_getp(predictions[i]->model_specifics, args[0]);
+				if (p) {
+					os << *p << endl;
+				} else {
+					os << "NA" << endl;
+				}
+			}
+		}
+	} else {
+		// print summary info for all predictions
+		t.add_row() << "N" << "PRED" << "REAL" << "ERROR";
+		for (int i = 0, iend = predictions.size(); i < iend; ++i) {
+			prediction_info *p = predictions[i];
+			t.add_row() << i;
+			if (p->success) {
+				t << p->pred_y;
+			} else {
+				t << "NA";
+			}
+			if (p->tested) {
+				t << p->real_y << p->error;
+			} else {
+				t << "NA" << "NA";
+			}
+		}
+		t.print(os);
+	}
+}
+
 void model::serialize(ostream &os) const {
 	serializer sr(os);
-	sr << name << type << learning << '\n';
+	sr << name << type << '\n';
 	sr << train_data << '\n';
 	serialize_sub(os);
 }
 
 void model::unserialize(istream &is) {
-	unserializer(is) >> name >> type >> learning >> train_data;
+	unserializer(is) >> name >> type >> train_data;
 	unserialize_sub(is);
 }
 
@@ -185,9 +275,9 @@ bool multi_model::predict_or_test(bool test, const scene_sig &sig, const relatio
 		assert(yobjs.size() == 1);
 		if (test) {
 			slice(yorig, yp, yinds, vector<int>());
-			cfg->mdl->test(yobjs[0], sig, rels, x, yp);
+			cfg->mdl->predict(yobjs[0], sig, rels, x, true, yp);
 		} else {
-			cfg->mdl->predict(yobjs[0], sig, rels, x, yp);
+			cfg->mdl->predict(yobjs[0], sig, rels, x, false, yp);
 		}
 		slice(yp, y, vector<int>(), yinds);
 	}
