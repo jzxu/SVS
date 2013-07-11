@@ -18,18 +18,28 @@ public:
 	}
 	
 	bool predict_sub(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, bool test, rvec &y, map<string,rvec> &info) {
-		return lwr.predict(x, y);
+		rvec centered, neighbors, dists, coefs, intercept;
+		bool success;
+		
+		success = lwr.predict(x, y, neighbors, dists, coefs, intercept);
+		if (success) {
+			info["neighbors"] = neighbors;
+			info["distances"] = dists;
+			info["coefs"]     = coefs;
+			info["intercept"] = intercept;
+		}
+		return success;
 	}
 	
 	int size() const {
 		return lwr.size();
 	}
 	
-	void unserialize(istream &is) {
+	void unserialize_sub(istream &is) {
 		lwr.unserialize(is);
 	}
 	
-	void serialize(ostream &os) const {
+	void serialize_sub(ostream &os) const {
 		lwr.serialize(os);
 	}
 	

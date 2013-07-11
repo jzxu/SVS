@@ -75,7 +75,7 @@ void LWR::learn(const rvec &x, const rvec &y) {
 	}
 }
 
-bool LWR::predict(const rvec &x, rvec &y) {
+bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &lin_coefs, rvec &intercept) {
 	int k = examples.size() > nnbrs ? nnbrs : examples.size();
 	if (k < 2) {
 		return false;
@@ -90,17 +90,19 @@ bool LWR::predict(const rvec &x, rvec &y) {
 	norm_vec(x, xmin, xrange, xn);
 	
 	vector<int> inds;
-	rvec d(k);
-	brute_nearest_neighbor(xnptrs, xn, k, inds, d);
+	brute_nearest_neighbor(xnptrs, xn, k, inds, dists);
 	
 	mat X(k, xsz);
 	mat Y(k, ysz);
+	neighbors.resize(k);
+	dists.resize(k);
 	for(int i = 0; i < k; ++i) {
 		X.row(i) = *examples[inds[i]]->x;
 		Y.row(i) = *examples[inds[i]]->y;
+		neighbors(i) = inds[i];
 	}
 	
-	rvec w = d.array().pow(-3).sqrt();
+	rvec w = dists.array().pow(-3).sqrt();
 	
 	/*
 	 Any neighbor whose weight is infinity is close enough
@@ -124,8 +126,6 @@ bool LWR::predict(const rvec &x, rvec &y) {
 	}
 
 	mat coefs;
-	rvec intercept;
-	
 	/*
 	 Using non-regularized methods seems to cause problems, so I'm switching over
 	 to ridge regression. Unfortunately I haven't figured out how to do weighted
@@ -135,6 +135,11 @@ bool LWR::predict(const rvec &x, rvec &y) {
 	*/
 	linreg_d(LASSO, X, Y, cvec(), noise_var, coefs, intercept);
 	y = x * coefs + intercept;
+	
+	lin_coefs.resize(coefs.rows());
+	for (int i = 0, iend = coefs.rows(); i < iend; ++i) {
+		lin_coefs(i) = coefs(i, 0);
+	}
 	return true;
 }
 

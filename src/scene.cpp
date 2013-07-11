@@ -865,16 +865,9 @@ void scene::proxy_get_children(map<string, cliproxy*> &c) {
 
 void scene::cli_props(const vector<string> &args, ostream &os) const {
 	rvec vals;
-	table_printer t;
-	
 	get_properties(vals);
-	int i = 0;
-	for (int j = 0, jend = sig.size(); j < jend; ++j) {
-		for (int k = 0, kend = sig[j].props.size(); k < kend; ++k) {
-			t.add_row() << sig[j].name + ':' + sig[j].props[k] << vals(i++);
-		}
-	}
-	t.print(os);
+	get_signature();
+	sig.print_with_vals(vals, os);
 }
 
 void scene::cli_dist(const vector<string> &args, ostream &os) const {

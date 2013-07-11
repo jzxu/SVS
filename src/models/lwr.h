@@ -11,7 +11,7 @@ public:
 	~LWR();
 	
 	void learn(const rvec &x, const rvec &y);
-	bool predict(const rvec &x, rvec &y);
+	bool predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &lin_coefs, rvec &intercept);
 	void load(std::istream &is);
 	void save(std::ostream &os) const;
 	

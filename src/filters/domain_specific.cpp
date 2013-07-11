@@ -1,6 +1,10 @@
+#include <string>
+#include <vector>
 #include "filter_table.h"
 #include "scene.h"
 #include "common.h"
+
+using namespace std;
 
 string get_action(const sgnode *n) {
 	string action;
