@@ -11,54 +11,53 @@ void norm_vec(const rvec &v, const rvec &min, const rvec &range, rvec &n) {
 	n = ((v.array() - min.array()) / range.array()).matrix();
 }
 
-void LWR::data::serialize(ostream &os) const {
-	serializer(os) << x << y << xnorm;
+void LWR::example::serialize(ostream &os) const {
+	serializer(os) << x << y;
 }
 
-void LWR::data::unserialize(istream &is) {
-	unserializer(is) >> x >> y >> xnorm;
+void LWR::example::unserialize(istream &is) {
+	unserializer(is) >> x >> y;
 }
 
 LWR::LWR(int nnbrs, double noise_var, bool alloc)
-: nnbrs(nnbrs), alloc(alloc), xsz(-1), ysz(-1), normalized(false), noise_var(noise_var)
+: nnbrs(nnbrs), alloc(alloc), xdim(-1), ydim(-1), normalized(false), noise_var(noise_var)
 {}
 
 LWR::~LWR() {
-	for (int i = 0; i < examples.size(); ++i) {
-		if (alloc) {
-			delete examples[i]->x;
-			delete examples[i]->y;
+	if (alloc) {
+		for (int i = 0, iend = data.size(); i < iend; ++i) {
+			delete data[i].x;
+			delete data[i].y;
 		}
-		delete examples[i];
 	}
 }
 
 void LWR::learn(const rvec &x, const rvec &y) {
-	if (xsz < 0) {
-		xsz = x.size();
-		ysz = y.size();
-		xmin.resize(xsz);
-		xmax.resize(xsz);
-		xrange.resize(xsz);
+	example e;
+	
+	if (xdim < 0) {
+		xdim = x.size();
+		ydim = y.size();
+		xmin.resize(xdim);
+		xmax.resize(xdim);
+		xrange.resize(xdim);
 	}
 	
-	data *d = new data;
 	if (alloc) {
-		d->x = new rvec(x);
-		d->y = new rvec(y);
+		e.x = new rvec(x);
+		e.y = new rvec(y);
 	} else {
-		d->x = &x;
-		d->y = &y;
+		e.x = &x;
+		e.y = &y;
 	}
-	examples.push_back(d);
-	xnptrs.push_back(&d->xnorm);
+	data.push_back(e);
 	
-	if (examples.size() == 1) {
+	if (data.size() == 1) {
 		xmin = x;
 		xmax = x;
 		xrange.setZero();
 	} else {
-		for (int i = 0; i < xsz; ++i) {
+		for (int i = 0; i < xdim; ++i) {
 			if (x[i] < xmin[i]) {
 				xmin[i] = x[i];
 				normalized = false;
@@ -71,34 +70,33 @@ void LWR::learn(const rvec &x, const rvec &y) {
 	
 	if (normalized) {
 		// otherwise just wait for renormalization
-		norm_vec(x, xmin, xrange, d->xnorm);
+		rvec xn;
+		norm_vec(x, xmin, xrange, xn);
+		Xnorm.append_row(xn);
 	}
 }
 
 bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &lin_coefs, rvec &intercept) {
-	int k = examples.size() > nnbrs ? nnbrs : examples.size();
+	int k = data.size() > nnbrs ? nnbrs : data.size();
 	if (k < 2) {
 		return false;
 	}
 	
-	if (!normalized) {
-		normalize();
-		normalized = true;
-	}
+	normalize();
 	
 	rvec xn;
 	norm_vec(x, xmin, xrange, xn);
 	
 	vector<int> inds;
-	brute_nearest_neighbor(xnptrs, xn, k, inds, dists);
+	brute_nearest_neighbor(Xnorm.get(), xn, k, inds, dists);
 	
-	mat X(k, xsz);
-	mat Y(k, ysz);
+	mat X(k, xdim);
+	mat Y(k, ydim);
 	neighbors.resize(k);
 	dists.resize(k);
 	for(int i = 0; i < k; ++i) {
-		X.row(i) = *examples[inds[i]]->x;
-		Y.row(i) = *examples[inds[i]]->y;
+		X.row(i) = *data[inds[i]].x;
+		Y.row(i) = *data[inds[i]].y;
 		neighbors(i) = inds[i];
 	}
 	
@@ -110,7 +108,7 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 	 average as the solution.  If we don't do this the solve()
 	 will fail due to infinite values in Z and V.
 	*/
-	rvec closeavg = rvec::Zero(ysz);
+	rvec closeavg = rvec::Zero(ydim);
 	int nclose = 0;
 	for (int i = 0; i < w.size(); ++i) {
 		if (w(i) == INF) {
@@ -126,14 +124,8 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 	}
 
 	mat coefs;
-	/*
-	 Using non-regularized methods seems to cause problems, so I'm switching over
-	 to ridge regression. Unfortunately I haven't figured out how to do weighted
-	 ridge regression, so for now I'm just dropping the weights.
-	
 	linreg_d(FORWARD, X, Y, w, noise_var, coefs, intercept);
-	*/
-	linreg_d(LASSO, X, Y, cvec(), noise_var, coefs, intercept);
+	//linreg_d(LASSO, X, Y, cvec(), noise_var, coefs, intercept);
 	y = x * coefs + intercept;
 	
 	lin_coefs.resize(coefs.rows());
@@ -144,6 +136,10 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 }
 
 void LWR::normalize() {
+	if (normalized) {
+		return;
+	}
+	
 	xrange = xmax - xmin;
 	// can't have division by 0
 	for (int i = 0; i < xrange.size(); ++i) {
@@ -152,23 +148,23 @@ void LWR::normalize() {
 		}
 	}
 
-	for (int i = 0; i < examples.size(); ++i) {
-		norm_vec(*examples[i]->x, xmin, xrange, examples[i]->xnorm);
+	Xnorm.resize(data.size(), data[0].x->size());
+	rvec n;
+	for (int i = 0, iend = data.size(); i < iend; ++i) {
+		norm_vec(*data[i].x, xmin, xrange, n);
+		Xnorm.row(i) = n;
 	}
+	normalized = true;
 }
 
 void LWR::serialize(ostream &os) const {
 	assert(alloc);  // it doesn't make sense to serialize points we don't own
-	serializer(os) << alloc << nnbrs << xsz << ysz << xmin << xmax
-	               << normalized << examples;
+	serializer(os) << nnbrs << xdim << ydim << xmin << xmax << data;
 }
 
 void LWR::unserialize(istream &is) {
 	assert(alloc);
-	unserializer(is) >> alloc >> nnbrs >> xsz >> ysz >> xmin >> xmax 
-	                 >> normalized >> examples;
-	xnptrs.clear();
-	for (int i = 0; i < examples.size(); ++i) {
-		xnptrs.push_back(&examples[i]->xnorm);
-	}
+	unserializer(is) >> nnbrs >> xdim >> ydim >> xmin >> xmax >> data;
+	normalized = false;
+	normalize();
 }

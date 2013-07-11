@@ -22,22 +22,8 @@ void di_queue_to_vec(di_queue &q, vector<int> &indexes, rvec &dists) {
 
 void brute_nearest_neighbor(const_mat_view data, const rvec &q, int k, vector<int> &indexes, rvec &dists) {
 	di_queue nn;
-	for (int i = 0; i < data.rows(); ++i) {
+	for (int i = 0, iend = data.rows(); i < iend; ++i) {
 		double d = (q - data.row(i)).squaredNorm();
-		if (possibly_better(d, k, nn)) {
-			nn.push(std::make_pair(d, i));
-			if (nn.size() > k) {
-				nn.pop();
-			}
-		}
-	}
-	di_queue_to_vec(nn, indexes, dists);
-}
-
-void brute_nearest_neighbor(const vector<rvec*> &data, const rvec &q, int k, vector<int> &indexes, rvec &dists) {
-	di_queue nn;
-	for (int i = 0; i < data.size(); ++i) {
-		double d = (q - *data[i]).squaredNorm();
 		if (possibly_better(d, k, nn)) {
 			nn.push(std::make_pair(d, i));
 			if (nn.size() > k) {

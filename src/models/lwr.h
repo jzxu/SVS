@@ -15,9 +15,9 @@ public:
 	void load(std::istream &is);
 	void save(std::ostream &os) const;
 	
-	int size() const { return examples.size(); }
-	int xsize() const { return xsz; }
-	int ysize() const { return ysz; }
+	int size() const { return data.size(); }
+	int xsize() const { return xdim; }
+	int ysize() const { return ydim; }
 	
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
@@ -25,19 +25,18 @@ public:
 private:
 	void normalize();
 	
-	class data : public serializable {
+	class example : public serializable {
 	public:
 		rvec const *x;
 		rvec const *y;
-		rvec xnorm;
 		
 		void serialize(std::ostream &os) const;
 		void unserialize(std::istream &is);
 	};
 	
-	int xsz, ysz, nnbrs;
-	std::vector<data*> examples;
-	std::vector<rvec*> xnptrs;
+	std::vector<example> data;
+	dyn_mat Xnorm;
+	int xdim, ydim, nnbrs;
 	rvec xmin, xmax, xrange;
 	bool normalized, alloc;
 	double noise_var;
