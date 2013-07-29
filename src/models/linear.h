@@ -9,7 +9,7 @@
 #include "mat.h"
 #include "scene_sig.h"
 
-enum regression_type { OLS, RIDGE, PCR, LASSO, FORWARD };
+enum regression_type { OLS, RIDGE, LASSO, FORWARD };
 
 void clean_lr_data(mat &X, std::vector<int> &used_cols);
 void augment_ones(mat &X);

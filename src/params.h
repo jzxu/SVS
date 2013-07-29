@@ -20,17 +20,6 @@
 */
 #define SAME_THRESH 1e-15
 
-/*
- Maximum number of times Leave One Out cross-validation will run for a
- single PCR fitting
-*/
-#define LOO_NTEST 30
-
-/*
- In PCR, don't use a beta vector with a norm larger than this.
-*/
-#define MAX_BETA_NORM 1.0e3
-
 /* Probability that any instance is just noise */
 #define PNOISE 0.0001
 

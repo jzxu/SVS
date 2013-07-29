@@ -185,104 +185,6 @@ bool fstep(const_mat_view X, const_mat_view Y, double var, mat &coefs) {
 }
 
 /*
- Use Leave-one-out cross validation to determine number of components
- to use. This seems to choose numbers that are too low.
-*/
-void cross_validate(const_mat_view X, const_mat_view Y, const cvec &w, double var, mat &beta, rvec &intercept) {
-	int ndata = X.rows(), maxcomps = X.cols();
-	
-	mat X1(ndata - 1, X.cols()), Y1(ndata - 1, Y.cols());
-	rvec errors = rvec::Zero(maxcomps);
-	vector<mat> betas;
-	vector<rvec> intercepts;
-	vector<int> leave_out;
-	int ntest = min(LOO_NTEST, ndata);
-	
-	mat components, projected, coefs, b;
-	rvec inter;
-	pca(X, components);
-	
-	leave_out.reserve(ndata);
-	for (int i = 0; i < ndata; ++i) {
-		leave_out.push_back(i);
-	}
-	random_shuffle(leave_out.begin(), leave_out.end());
-	
-	for (int i = 0; i < ntest; ++i) {
-		int n = leave_out[i];
-		if (n > 0) {
-			X1.topRows(n) = X.topRows(n);
-			Y1.topRows(n) = Y.topRows(n);
-		}
-		if (n < ndata - 1) {
-			X1.bottomRows(ndata - n - 1) = X.bottomRows(ndata - n - 1);
-			Y1.bottomRows(ndata - n - 1) = Y.bottomRows(ndata - n - 1);
-		}
-		projected = X1 * components;
-		for (int j = 0; j < maxcomps; ++j) {
-			linreg(OLS, projected.leftCols(j), Y1, w, var, coefs, inter);
-			b = components.leftCols(i) * coefs;
-			errors(j) += (X.row(n) * b + inter - Y.row(n)).array().abs().sum();
-		}
-	}
-	int best = -1;
-	for (int i = 0; i < maxcomps; ++i) {
-		if (best == -1 || errors(best) > errors(i)) {
-			best = i;
-		}
-	}
-	projected = X * components;
-	linreg(OLS, projected.leftCols(best), Y, cvec(), var, coefs, inter);
-	beta = components.leftCols(best) * coefs;
-	intercept = inter;
-}
-
-/*
- Choose the number of components to minimize prediction error for
- the training instances. Also prevent the beta vector from blowing up
- too much.
-*/
-bool min_train_error(const_mat_view X, const_mat_view Y, mat &beta) {
-	vector<mat> betas;
-	vector<rvec> intercepts;
-	double minerror;
-	int bestn = -1;
-	mat components, projected, coefs, b;
-	
-	pca(X, components);
-	projected = X * components;
-	for (int i = 0; i < projected.cols(); ++i) {
-		if (!solve(projected.leftCols(i), Y, coefs)) {
-			continue;
-		}
-		b = components.leftCols(i) * coefs;
-		
-		if (b.squaredNorm() > MAX_BETA_NORM) {
-			break;
-		}
-		double error = (X * b - Y).squaredNorm();
-		
-		if (error < MODEL_ERROR_THRESH) {
-			beta = b;
-			return true;
-		}
-		
-		if (bestn < 0 || error < minerror) {
-			beta = b;
-			minerror = error;
-		}
-	}
-	return bestn != -1;
-}
-
-bool wpcr(const_mat_view X, const_mat_view Y, mat &coefs) {
-	if (!min_train_error(X, Y, coefs)) {
-		return false;
-	}
-	return true;
-}
-
-/*
  Cleaning consists of:
  
  1. collapsing all columns whose elements are identical into a single constant column.
@@ -347,9 +249,6 @@ bool linreg_clean(regression_type t, const_mat_view X, const_mat_view Y, double 
 			return ridge(X, Y, coefs);
 		case LASSO:
 			return lasso(X, Y, coefs);
-		case PCR:
-			return wpcr(X, Y, coefs);
-			break;
 		case FORWARD:
 			return fstep(X, Y, var, coefs);
 		default:
@@ -384,12 +283,12 @@ bool linreg_d(regression_type t, mat &X, mat &Y, const cvec &w, double var, mat 
 	    intercept.
 	 
 	 Unfortunately from what I can gather, method 1 doesn't work with weighted
-	 regression, and method 2 doesn't work with ridge regression or PCR.
+	 regression, and method 2 doesn't work with ridge regression.
 	*/
 	
 	bool augment = (w.size() > 0);
 	if (augment) {
-		assert(t != RIDGE && t != PCR);
+		assert(t != RIDGE);
 		fix_for_wols(X, Y, w);
 	} else {
 		center_data(X, Xm);

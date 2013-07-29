@@ -83,9 +83,6 @@ private:
 	void fill_xy(const interval_set &rows, mat &X, mat &Y) const;
 
 	bool unify_or_add_mode();
-	int find_linear_subset(mat &X, mat &Y, std::vector<int> &subset, mat &coefs, rvec &inter) const;
-	void find_linear_subset_em(const_mat_view X, const_mat_view Y, std::vector<int> &subset) const;
-	void find_linear_subset_block(const_mat_view X, const_mat_view Y, std::vector<int> &subset) const;
 	em_mode *add_mode(bool manual);
 	bool remove_modes();
 
