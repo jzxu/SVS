@@ -739,10 +739,11 @@ void EM::print_ptable(ostream &os) const {
 
 void EM::print_modes(ostream &os) const {
 	table_printer t;
+	t.add_row() << 0 << modes[0]->size() << "noise";
 	for (int i = 1, iend = modes.size(); i < iend; ++i) {
 		string func;
 		modes[i]->get_function_string(func);
-		t.add_row() << i << func;
+		t.add_row() << i << modes[i]->size() << func;
 	}
 	t.print(os);
 }
