@@ -205,7 +205,7 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 		
 		fit_set.clear();
 		for (int j = 0; j < ndata; ++j) {
-			if (error(j) <= MODEL_ERROR_THRESH) {
+			if (gaussprob(error(j), 0, noise_var) > PNOISE) {
 				fit_set.push_back(j);
 			}
 		}
@@ -283,7 +283,7 @@ void EM::add_data(int t) {
 	inst->minfo[0].prob_stale = false;
 	insts.push_back(inst);
 	
-	modes[0]->add_example(t, vector<int>());
+	modes[0]->add_example(t, vector<int>(), noise_var);
 	clsfr.update_inst(t, 0);
 }
 
@@ -342,7 +342,7 @@ void EM::estep() {
 					sigs[d.sig]->noise.erase(i);
 				}
 				assert(modes[best]->get_sig().size() == inst.minfo[best].sig_map.size());
-				modes[best]->add_example(i, inst.minfo[best].sig_map);
+				modes[best]->add_example(i, inst.minfo[best].sig_map, noise_var);
 				if (best == 0) {
 					sigs[d.sig]->noise.insert(i);
 				}
@@ -445,6 +445,8 @@ bool EM::unify_or_add_mode() {
 		return false;
 	}
 	
+	loggers->get(LOG_EM) << "Found " << largest.size() << " colinear examples in noise." << endl;
+
 	/*
 	 From here I know the noise data is going to either become a new mode or unify
 	 with an existing mode, so reset check_after assuming the current noise is
@@ -494,6 +496,12 @@ bool EM::unify_or_add_mode() {
 	em_mode *new_mode = add_mode(false);
 	const model_train_inst &d0 = data.get_inst(largest[0]);
 	new_mode->set_params(*d0.sig, d0.target, coefs, inter);
+
+	loggers->get(LOG_EM) << "Adding new mode " << modes.size() - 1 << endl << "coefs =";
+	for (int i = 0; i < coefs.rows(); ++i) {
+		loggers->get(LOG_EM) << " " << coefs(i, 0);
+	}
+	loggers->get(LOG_EM) << endl;
 	return true;
 }
 

@@ -4,9 +4,6 @@
 /* Initial lambda value for ridge regression */
 #define RIDGE_LAMBDA 1e-8
 
-/* Maximum acceptable average absolute error for a linear model */
-#define MODEL_ERROR_THRESH 1e-4
-
 /*
  A local model does not need to be refit to data if its training error
  increases by less than this factor with a new data point, assuming the
@@ -22,9 +19,6 @@
 
 /* Probability that any instance is just noise */
 #define PNOISE 0.0001
-
-/* What's this for? */
-#define EPSILON 0.001
 
 /*
  Number of noise instances required before EM tries to create a new

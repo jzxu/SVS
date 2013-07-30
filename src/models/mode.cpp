@@ -310,7 +310,6 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 	}
 	
 	rvec py;
-	double w = 1.0;
 	
 	/*
 	 Each mode has a signature that specifies the types and orders of
@@ -332,9 +331,7 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 		py = lin_inter;
 		best_error = (y - py(0));
 		best_assign.clear();
-		double d = gausspdf(y, py(0), noise_var);
-		double p = (1.0 - EPSILON) * w * d;
-		return p;
+		return gaussprob(y, py(0), noise_var);
 	}
 	
 	/*
@@ -374,8 +371,7 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 		assert(s == xlen);
 		
 		py = (xc * lin_coefs) + lin_inter;
-		double d = gausspdf(y, py(0), noise_var);
-		double p = (1.0 - EPSILON) * w * d;
+		double p = gaussprob(y, py(0), noise_var);
 		if (p > best_prob) {
 			best_prob = p;
 			best_assign = assign;
@@ -447,7 +443,7 @@ void em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> &e
 	y = ((xc * lin_coefs) + lin_inter)(0);
 }
 
-void em_mode::add_example(int t, const vector<int> &ex_obj_map) {
+void em_mode::add_example(int t, const vector<int> &ex_obj_map, double noise_var) {
 	assert(!members.contains(t) && ex_obj_map.size() == sig.size());
 	
 	const model_train_inst &d = data.get_inst(t);
@@ -473,7 +469,10 @@ void em_mode::add_example(int t, const vector<int> &ex_obj_map) {
 	} else {
 		rvec y(1);
 		predict(*d.sig, d.x, ex_obj_map, y(0));
-		if ((y - d.y).norm() > MODEL_ERROR_THRESH) {
+		/*
+		 Maybe this is too lenient about when a mode is considered stale.
+		*/
+		if (gaussprob(d.y(0), y(0), noise_var) <= PNOISE) {
 			stale = true;
 		}
 	}

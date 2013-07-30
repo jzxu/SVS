@@ -196,6 +196,19 @@ inline double gausspdf(double x, double mean, double var) {
 	return (1. / (sqrt(var) * SQRT2PI)) * exp(-((x - mean) * (x - mean) / (2 * var)));
 }
 
+/*
+ Not sure where I got this calculation, but it seems pretty worthless. I can
+ probably get rid of probability calculations for goodness of mode fit
+ altogether, and just use the residual errors. This is because I'm not doing a
+ weighted linear regression in EM; I'm only regressing each mode function on
+ the points that fit it best, so only error comparisons matter, and the
+ exponential scaling from the Gaussian PDF calculation does not.
+*/
+inline double gaussprob(double x, double mean, double var) {
+	const double epsilon = 0.001;
+	return (1.0 - epsilon) * gausspdf(x, mean, var);
+}
+
 class table_printer {
 public:
 	table_printer();
