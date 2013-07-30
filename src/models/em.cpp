@@ -284,7 +284,7 @@ void EM::add_data(int t) {
 	insts.push_back(inst);
 	
 	modes[0]->add_example(t, vector<int>(), noise_var);
-	clsfr.update_inst(t, 0);
+	clsfr.update_class(t, -1, 0);
 }
 
 void EM::estep() {
@@ -346,7 +346,7 @@ void EM::estep() {
 				if (best == 0) {
 					sigs[d.sig]->noise.insert(i);
 				}
-				clsfr.update_inst(i, best);
+				clsfr.update_class(i, prev, best);
 			}
 		}
 	}
@@ -550,6 +550,7 @@ bool EM::remove_modes() {
 			}
 			i++;
 		} else {
+			loggers->get(LOG_EM) << "Mode " << j << " only has " << modes[j]->size() << " examples, removing" << endl;
 			index_map[j] = 0;
 			delete modes[j];
 			removed.push_back(j);
@@ -562,9 +563,10 @@ bool EM::remove_modes() {
 	modes.resize(i);
 	for (int j = 0, jend = insts.size(); j < jend; ++j) {
 		if (insts[j]->mode >= 0) {
-			insts[j]->mode = index_map[insts[j]->mode];
-			if (insts[j]->mode == 0) {
-				clsfr.update_inst(j, 0);
+			int old_mode = insts[j]->mode;
+			insts[j]->mode = index_map[old_mode];
+			if (old_mode != 0 && insts[j]->mode == 0) {
+				clsfr.update_class(j, old_mode, 0);
 			}
 		}
 		remove_from_vector(removed, insts[j]->minfo);

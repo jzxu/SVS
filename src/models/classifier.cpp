@@ -344,7 +344,11 @@ void classifier::del_classes(const vector<int> &c) {
 	int n = 0;
 	for (int i = 0, iend = classes.size(); i < iend; ++i) {
 		if (has(c, i)) {
-			assert(classes[i]->mem_rel.empty());
+			if (!classes[i]->mem_rel.empty()) {
+				cout << "ERROR: deleting non-empty class" << endl;
+				cout << classes[i]->mem_rel << endl;
+				assert(false);
+			}
 			delete classes[i];
 			class_map[i] = -1;
 		} else {
@@ -370,30 +374,26 @@ void classifier::del_classes(const vector<int> &c) {
 	}
 }
 
-void classifier::update_inst(int i, int c) {
-	assert(0 <= i && i <= membership.size() && 0 <= c && c < classes.size());
-	// assume new instances can only arrive in order
-	if (i == membership.size()) {
-		membership.push_back(-1);
-	}
-	
-	if (membership[i] == c) {
+void classifier::update_class(int i, int old_class, int new_class) {
+	assert(0 <= new_class && new_class < classes.size());
+	if (old_class == new_class) {
 		return;
 	}
 	
 	const model_train_inst &inst = data.get_inst(i);
 	int target = (*inst.sig)[inst.target].id;
-	if (membership[i] >= 0) {
-		class_info *oldc = classes[membership[i]];
+	int_tuple old_t(2);
+	old_t[0] = i; old_t[1] = target;
+	if (old_class >= 0) {
+		class_info *oldc = classes[old_class];
+		assert(oldc->mem_rel.contains(old_t));
 		oldc->mem_rel.del(i, target);
 		oldc->stale = true;
 	}
 	
-	class_info *newc = classes[c];
+	class_info *newc = classes[new_class];
 	newc->mem_rel.add(i, target);
 	newc->stale = true;
-	
-	membership[i] = c;
 }
 
 classifier::pair_info *classifier::find(int i, int j) {
@@ -538,11 +538,11 @@ void classifier::cli_dump_foil6(const vector<string> &args, ostream &os) const {
 }
 
 void classifier::serialize(ostream &os) const {
-	serializer(os) << pairs << classes << membership;
+	serializer(os) << pairs << classes;
 }
 
 void classifier::unserialize(istream &is) {
-	unserializer(is) >> pairs >> classes >> membership;
+	unserializer(is) >> pairs >> classes;
 
 	std::list<pair_info*>::iterator i, iend;
 	for (i = pairs.begin(), iend = pairs.end(); i != iend; ++i) {

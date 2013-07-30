@@ -65,7 +65,7 @@ public:
 	void add_class();
 	void del_classes(const std::vector<int> &c);
 	
-	void update_inst(int i, int cls);
+	void update_class(int i, int old_class, int new_class);
 	void classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &votes);
 
 	void serialize(std::ostream &os) const;
@@ -98,7 +98,6 @@ private:
 	const model_train_data &data;
 	std::list<pair_info*> pairs;
 	std::vector<class_info*> classes;
-	std::vector<int> membership;       // class of each instance. membership.size() == data.size()
 	
 	bool foil, prune, context;
 	int nc_type;
