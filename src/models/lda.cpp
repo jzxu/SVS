@@ -381,8 +381,6 @@ void LDA::unserialize(istream &is) {
 	unserializer(is) >> W >> projected >> J >> classes >> used_cols >> degenerate >> degenerate_class;
 }
 
-inline int sign(double x) { return x >= 0 ? 1 : -1; }
-
 sign_classifier::sign_classifier() : dim(-1), sgn(0), size(-1) {}
 
 void sign_classifier::learn(mat &data, const vector<int> &classes) {

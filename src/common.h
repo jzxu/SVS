@@ -209,6 +209,16 @@ inline double gaussprob(double x, double mean, double var) {
 	return (1.0 - epsilon) * gausspdf(x, mean, var);
 }
 
+inline int sign(double x) {
+	if (x < 0.0) {
+		return -1;
+	} else if (x > 0.0) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
 class table_printer {
 public:
 	table_printer();

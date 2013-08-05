@@ -19,8 +19,8 @@
 #include "drawer.h"
 #include "logger.h"
 
-//#define DBGCOUNT(n) { static int count = 0; fprintf(stderr, "%s %d\n", n, count++); }
-#define DBGCOUNT(n)
+#define DBGCOUNT(n) { static int count = 0; fprintf(stderr, "%s %d\n", n, count++); }
+//#define DBGCOUNT(n)
 
 using namespace std;
 using namespace Eigen;
@@ -144,6 +144,69 @@ int ransac_iters(int ninliers, int mss_size, int ndata) {
 	return static_cast<int>(floor(i1));
 }
 
+/*
+ Check if any examples (rows) in X and Y are causing spurious regressors to be
+ included in the linear function that describes the data, as defined by coefs.
+ This is done in a way similar to cross-validation: some portion of the data is
+ held out, a linear regression is performed, and the coefficients obtained are
+ compared to the coefs parameter. If any of the coefficients differ in sign,
+ that is, negative, 0, positive, then this indicates the presence of spurious
+ regressors.
+
+ The alternative to checking sign agreement is to check the Euclidean distance
+ between the coefficients. But this would have to be compared against an
+ arbitrary threshold, which would be yet another free parameter in the system.
+
+ Normal cross-validation doesn't work well in this case, because we expect that
+ only a few (most likely just one) data points are necessitating the spurious
+ regressors. Therefore, the cross-validated error would still be very low,
+ because only the error on a few data points would be high. Maybe normal CV
+ will work if we consider the max error rather than average error.
+*/
+bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, const mat &coefs) {
+	int holdout_size, holdin_size, holdout_start;
+	mat Xin, Yin;
+	mat coefs_in;
+	rvec inter_in;
+	cvec dummy;
+
+	holdout_size = X.rows() * .3;
+	if (holdout_size == 0)
+		holdout_size = 1;
+	holdin_size = X.rows() - holdout_size;
+	Xin.resize(holdin_size, X.cols());
+	Yin.resize(holdin_size, Y.cols());
+	holdout_start = 0;
+	while (holdout_start < X.rows()) {
+		/*
+		 If X.rows() doesn't divide evenly by holdout_size, then the last iteration
+		 may result in fewer than holdin_size hold-ins. Manually adjust for this.
+		*/
+		if (holdout_start + holdout_size > X.rows()) {
+			holdout_start = X.rows() - holdout_size;
+		}
+		int top_size = holdout_start;
+		int bottom_size = holdin_size - top_size;
+		Xin.topRows(top_size) = X.topRows(top_size);
+		Yin.topRows(top_size) = Y.topRows(top_size);
+		Xin.bottomRows(bottom_size) = X.bottomRows(bottom_size);
+		Yin.bottomRows(bottom_size) = Y.bottomRows(bottom_size);
+
+		if (!linreg(FORWARD, Xin, Yin, dummy, noise_var, coefs_in, inter_in)) {
+			assert(false);
+		}
+		
+		assert(coefs_in.rows() == coefs.rows());
+		for (int i = 0, iend = coefs_in.rows(); i < iend; ++i) {
+			if (sign(coefs_in(i, 0)) != sign(coefs(i, 0))) {
+				return true;
+			}
+		}
+		holdout_start += holdout_size;
+	}
+	return false;
+}
+
 void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int split,
             vector<int> &subset, mat &coefs, rvec &intercept)
 {
@@ -155,7 +218,7 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 	int ndata = X.rows();
 	int mss_size = 6;
 	int iters;
-	
+	double error_thresh = sqrt(noise_var) * NUM_STDEVS_THRESH;
 	
 	if (ndata <= mss_size) {
 		split = 0;
@@ -196,7 +259,6 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 		pick_rows(X, mss, Xmss);
 		pick_rows(Y, mss, Ymss);
 		static int dbgcount = 0;
-		DBGCOUNT("RANSAC")
 		if (!linreg_d(FORWARD, Xmss, Ymss, dummy, noise_var, C, inter)) {
 			assert(false);
 		}
@@ -205,18 +267,23 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 		
 		fit_set.clear();
 		for (int j = 0; j < ndata; ++j) {
-			if (gaussprob(error(j), 0, noise_var) > PNOISE) {
+			if (error(j) <= error_thresh) {
 				fit_set.push_back(j);
 			}
 		}
 		if (fit_set.size() > subset.size()) {
-			subset = fit_set;
-			coefs = C;
-			intercept = inter;
-			if (subset.size() >= size_thresh) {
-				return;
+			mat Xsub, Ysub;
+			pick_rows(X, fit_set, Xsub);
+			pick_rows(Y, fit_set, Ysub);
+			if (!find_spurious_regressors(Xsub, Ysub, noise_var, C)) {
+				subset = fit_set;
+				coefs = C;
+				intercept = inter;
+				if (subset.size() >= size_thresh) {
+					return;
+				}
+				iters = ransac_iters(subset.size(), mss_size, ndata);
 			}
-			iters = ransac_iters(subset.size(), mss_size, ndata);
 		}
 	}
 }
@@ -279,8 +346,6 @@ void EM::add_data(int t) {
 	
 	inst->mode = 0;
 	inst->minfo.resize(modes.size());
-	inst->minfo[0].prob = PNOISE;
-	inst->minfo[0].prob_stale = false;
 	insts.push_back(inst);
 	
 	modes[0]->add_example(t, vector<int>(), noise_var);
@@ -288,7 +353,6 @@ void EM::add_data(int t) {
 }
 
 void EM::estep() {
-	DBGCOUNT("ESTEP")
 	
 	/*
 	 For data i and mode j, if:
@@ -364,7 +428,6 @@ void EM::estep() {
 }
 
 bool EM::mstep() {
-	DBGCOUNT("MSTEP")
 	function_timer t(timers.get_or_add("m-step"));
 	
 	bool changed = false;
@@ -403,7 +466,6 @@ em_mode *EM::add_mode(bool manual) {
 }
 
 bool EM::unify_or_add_mode() {
-	DBGCOUNT("UNIFY")
 	function_timer t(timers.get_or_add("new"));
 
 	assert(check_after >= NEW_MODE_THRESH);
