@@ -301,22 +301,29 @@ void EM::estep() {
 	for (int i = 0, iend = insts.size(); i < iend; ++i) {
 		const model_train_inst &d = data.get_inst(i);
 		inst_info &inst = *insts[i];
-		bool stale = false;
+		bool best_stale = false;
 		for (int j = 1, jend = modes.size(); j < jend; ++j) {
 			inst_info::mode_info &m = inst.minfo[j];
 			if (!m.prob_stale && !modes[j]->is_new_fit()) {
 				continue;
 			}
-			double prev = inst.minfo[inst.mode].prob, now, error;
-			now = modes[j]->calc_prob(d.target, *d.sig, d.x, d.y(0), noise_var, m.sig_map, error);
-			assert(m.sig_map.size() == modes[j]->get_sig().size());
-			if ((inst.mode == j && now < prev) || (inst.mode != j && now > m.prob)) {
-				stale = true;
+			/*
+			 I used to compare new_prob against prev, which was set to
+			 inst.minfo[inst.mode].prob, but I'm pretty sure that's wrong.
+			 The task here is to set best_stale to true if
+			   - P(inst j is mode m) decreases, and m is the current best mode, or
+			   - P(inst j is mode m) increases, and m is not the current best mode
+			*/
+			double new_prob, error;
+			new_prob = modes[j]->calc_prob(d.target, *d.sig, d.x, d.y(0), noise_var, m.sig_map, error);
+			assert(new_prob == 0.0 || m.sig_map.size() == modes[j]->get_sig().size());
+			if ((inst.mode == j && new_prob < m.prob) || (inst.mode != j && new_prob > m.prob)) {
+				best_stale = true;
 			}
-			m.prob = now;
+			m.prob = new_prob;
 			m.prob_stale = false;
 		}
-		if (stale) {
+		if (best_stale) {
 			int prev = inst.mode, best = 0;
 			for (int j = 1, jend = modes.size(); j < jend; ++j) {
 				double p1 = inst.minfo[j].prob;

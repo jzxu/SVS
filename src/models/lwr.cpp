@@ -11,6 +11,35 @@ void norm_vec(const rvec &v, const rvec &min, const rvec &range, rvec &n) {
 	n = ((v.array() - min.array()) / range.array()).matrix();
 }
 
+double gpr_kernel(const rvec &x1, const rvec &x2, double sigma, double clen) {
+	return (sigma * sigma) * exp((x1 - x2).squaredNorm() / (-2 * clen * clen));
+}
+
+/*
+ Vanilla GPR
+*/
+void gpr(const mat &Xtrain, const cvec &ytrain, const rvec &xtest, double sigma, double clen, double &mean, double &variance) {
+	int n = Xtrain.rows();
+	mat K(n, n), Kinv;
+	
+	for (int i = 0; i < n; ++i) {
+		for (int j = i; j < n; ++j) {
+			K(i, j) = gpr_kernel(Xtrain.row(i), Xtrain.row(j), sigma, clen);
+			K(j, i) = K(i, j);
+		}
+	}
+	Kinv = K.inverse();
+
+	rvec Kstar(n);
+	for (int i = 0; i < n; ++i) {
+		Kstar(i) = gpr_kernel(xtest, Xtrain.row(i), sigma, clen);
+	}
+
+	double Kstar2 = gpr_kernel(xtest, xtest, sigma, clen);
+	mean = (Kstar * Kinv * ytrain)(0, 0);
+	variance = Kstar2 - (Kstar * Kinv * Kstar.transpose())(0, 0);
+}
+
 void LWR::example::serialize(ostream &os) const {
 	serializer(os) << x << y;
 }
@@ -123,6 +152,7 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 		return true;
 	}
 
+	/*
 	mat coefs;
 	linreg_d(FORWARD, X, Y, w, noise_var, coefs, intercept);
 	//linreg_d(LASSO, X, Y, cvec(), noise_var, coefs, intercept);
@@ -132,6 +162,12 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 	for (int i = 0, iend = coefs.rows(); i < iend; ++i) {
 		lin_coefs(i) = coefs(i, 0);
 	}
+	*/
+	double sigma, clen, mean, var;
+	sigma = 1e-4;
+	clen = 10;
+	gpr(X, Y.col(0), x, sigma, clen, mean, var);
+	y(0) = mean;
 	return true;
 }
 
@@ -159,12 +195,12 @@ void LWR::normalize() {
 
 void LWR::serialize(ostream &os) const {
 	assert(alloc);  // it doesn't make sense to serialize points we don't own
-	serializer(os) << nnbrs << xdim << ydim << xmin << xmax << data;
+	serializer(os) << xdim << ydim << xmin << xmax << data;
 }
 
 void LWR::unserialize(istream &is) {
 	assert(alloc);
-	unserializer(is) >> nnbrs >> xdim >> ydim >> xmin >> xmax >> data;
+	unserializer(is) >> xdim >> ydim >> xmin >> xmax >> data;
 	normalized = false;
 	normalize();
 }

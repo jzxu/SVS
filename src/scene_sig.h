@@ -48,6 +48,7 @@ public:
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
 	void print(std::ostream &os) const;
+	void print_to_stdout() const;
 	void print_with_vals(const rvec &x, std::ostream &os) const;
 	int dim() const;
 	void add(const entry &e);

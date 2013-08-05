@@ -9,7 +9,7 @@ using namespace std;
 string get_action(const sgnode *n) {
 	string action;
 	if (!map_get(n->get_string_properties(), string("action"), action)) {
-		assert(false);
+		return "";
 	}
 	return action;
 }

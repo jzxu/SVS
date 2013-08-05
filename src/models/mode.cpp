@@ -247,6 +247,7 @@ void em_mode::learn_obj_clauses(const relation_table &rels) const {
 void em_mode::proxy_get_children(map<string, cliproxy*> &c) {
 	c["clauses"] = new memfunc_proxy<em_mode>(this, &em_mode::cli_clauses);
 	c["members"] = new memfunc_proxy<em_mode>(this, &em_mode::cli_members);
+	c["sig"]     = new memfunc_proxy<em_mode>(this, &em_mode::cli_sig);
 }
 
 void em_mode::proxy_use_sub(const vector<string> &args, ostream &os) {
@@ -288,6 +289,9 @@ void em_mode::cli_members(ostream &os) const {
 	os << members << endl;
 }
 
+void em_mode::cli_sig(ostream &os) const {
+	sig.print(os);
+}
 
 /*
  The fields noise, data, and sigs are initialized in the constructor, and
@@ -305,11 +309,9 @@ void em_mode::unserialize(istream &is) {
 
 double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, double y, double noise_var, vector<int> &best_assign, double &best_error) const {
 	if (noise) {
-		return PNOISE;
 		best_error = INF;
+		return PNOISE;
 	}
-	
-	rvec py;
 	
 	/*
 	 Each mode has a signature that specifies the types and orders of
@@ -325,12 +327,15 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 	 the mode signature.
 	*/
 	
+	rvec py;
+	best_assign.clear();
+	best_error = INF;
+
 	if (sig.empty()) {
 		// should be constant prediction
 		assert(lin_coefs.size() == 0);
 		py = lin_inter;
 		best_error = (y - py(0));
-		best_assign.clear();
 		return gaussprob(y, py(0), noise_var);
 	}
 	
@@ -358,7 +363,7 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 	vector<int> assign;
 	int xlen = sig.dim();
 	rvec xc(xlen);
-	double best_prob = -1.0;
+	double best_prob = 0.0;
 	while (gen.next(assign)) {
 		int s = 0;
 		for (int i = 0; i < assign.size(); ++i) {
@@ -378,7 +383,6 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 			best_error = y - py(0);
 		}
 	}
-	assert(best_prob >= 0.0);
 	return best_prob;
 }
 

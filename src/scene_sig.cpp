@@ -66,6 +66,10 @@ void scene_sig::print(ostream &os) const {
 	t.print(os);
 }
 
+void scene_sig::print_to_stdout() const {
+	print(cout);
+}
+
 void scene_sig::print_with_vals(const rvec &x, ostream &os) const {
 	table_printer t;
 	int k = 0;

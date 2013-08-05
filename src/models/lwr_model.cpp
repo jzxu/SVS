@@ -58,7 +58,7 @@ private:
 model *_make_lwr_model_(svs *owner, const string &name) {
 	Symbol *attr;
 	wme *nnbrs_wme = NULL, *var_wme = NULL;
-	long nnbrs = 50;
+	long nnbrs = 20;
 	double noise_var = 1e-8;
 	string attrstr;
 	

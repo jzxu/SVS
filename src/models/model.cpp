@@ -209,7 +209,12 @@ void model::cli_predictions(const vector<string> &args, ostream &os) {
 				t << "NA";
 			}
 			if (p->tested) {
-				t << p->real_y << p->error;
+				t << p->real_y;
+				if (p->success) {
+					t << p->error;
+				} else {
+					t << "NA";
+				}
 			} else {
 				t << "NA" << "NA";
 			}

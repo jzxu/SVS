@@ -101,6 +101,7 @@ private:
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
 	void cli_clauses(std::ostream &os) const;
 	void cli_members(std::ostream &os) const;
+	void cli_sig(std::ostream &os) const;
 };
 
 #endif
