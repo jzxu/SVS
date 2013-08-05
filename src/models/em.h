@@ -25,11 +25,11 @@ public:
 	*/
 	class mode_info : public serializable {
 	public:
-		double prob;                // probability that data point belongs to mode
-		bool prob_stale;            // does prob need to be update?
+		double error;               // residual error of using this mode to predict this data point
+		bool error_stale;           // does error need to be update?
 		std::vector<int> sig_map;   // map from objects in this instance to variables in mode sig
 	
-		mode_info() : prob(0), prob_stale(true) {}
+		mode_info() : error(INF), error_stale(true) {}
 		void serialize(std::ostream &os) const;
 		void unserialize(std::istream &is);
 	};
@@ -68,7 +68,7 @@ public:
 	void unserialize(std::istream &is);
 	
 	// for test_em.cpp
-	void print_ptable(std::ostream &os) const;
+	void print_error_table(std::ostream &os) const;
 	void print_modes(std::ostream &os) const;
 	void set_noise_var(double v) { noise_var = v; }
 	
@@ -89,7 +89,7 @@ private:
 	int classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &obj_map);
 	
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
-	void cli_ptable(std::ostream &os) const;
+	void cli_error_table(std::ostream &os) const;
 	void cli_add_mode(const std::vector<std::string> &args, std::ostream &os);
 
 	typedef std::map<const scene_sig*,sig_info*> sig_table;

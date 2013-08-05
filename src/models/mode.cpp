@@ -307,10 +307,9 @@ void em_mode::unserialize(istream &is) {
 	                 >> lin_coefs >> lin_inter >> n_nonzero >> manual >> obj_clauses_stale;
 }
 
-double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, double y, double noise_var, vector<int> &best_assign, double &best_error) const {
+double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, double y, double noise_var, vector<int> &best_assign) const {
 	if (noise) {
-		best_error = INF;
-		return PNOISE;
+		return INF;
 	}
 	
 	/*
@@ -329,14 +328,12 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 	
 	rvec py;
 	best_assign.clear();
-	best_error = INF;
 
 	if (sig.empty()) {
 		// should be constant prediction
 		assert(lin_coefs.size() == 0);
 		py = lin_inter;
-		best_error = (y - py(0));
-		return gaussprob(y, py(0), noise_var);
+		return fabs(y - py(0));
 	}
 	
 	/*
@@ -357,13 +354,12 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 	multi_combination_generator<int> gen(possibles, false);
 	
 	/*
-	 Iterate through all assignments and find the one that gives
-	 highest probability.
+	 Iterate through all assignments and find the one that gives lowest error
 	*/
 	vector<int> assign;
 	int xlen = sig.dim();
 	rvec xc(xlen);
-	double best_prob = 0.0;
+	double best_error = INF;
 	while (gen.next(assign)) {
 		int s = 0;
 		for (int i = 0; i < assign.size(); ++i) {
@@ -376,14 +372,13 @@ double em_mode::calc_prob(int target, const scene_sig &dsig, const rvec &x, doub
 		assert(s == xlen);
 		
 		py = (xc * lin_coefs) + lin_inter;
-		double p = gaussprob(y, py(0), noise_var);
-		if (p > best_prob) {
-			best_prob = p;
+		double error = fabs(y - py(0));
+		if (error < best_error) {
+			best_error = error;
 			best_assign = assign;
-			best_error = y - py(0);
 		}
 	}
-	return best_prob;
+	return best_error;
 }
 
 bool em_mode::update_fits(double noise_var) {
@@ -471,12 +466,9 @@ void em_mode::add_example(int t, const vector<int> &ex_obj_map, double noise_var
 	if (noise) {
 		sorted_ys.insert(make_pair(d.y(0), t));
 	} else {
-		rvec y(1);
-		predict(*d.sig, d.x, ex_obj_map, y(0));
-		/*
-		 Maybe this is too lenient about when a mode is considered stale.
-		*/
-		if (gaussprob(d.y(0), y(0), noise_var) <= PNOISE) {
+		double py;
+		predict(*d.sig, d.x, ex_obj_map, py);
+		if (fabs(d.y(0) - py) > sqrt(noise_var) * NUM_STDEVS_THRESH) {
 			stale = true;
 		}
 	}

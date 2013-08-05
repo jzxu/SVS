@@ -18,7 +18,7 @@
 #define SAME_THRESH 1e-15
 
 /* Probability that any instance is just noise */
-#define PNOISE 0.0001
+#define NUM_STDEVS_THRESH 3
 
 /*
  Number of noise instances required before EM tries to create a new

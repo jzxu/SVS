@@ -304,43 +304,43 @@ void EM::estep() {
 		bool best_stale = false;
 		for (int j = 1, jend = modes.size(); j < jend; ++j) {
 			inst_info::mode_info &m = inst.minfo[j];
-			if (!m.prob_stale && !modes[j]->is_new_fit()) {
+			if (!m.error_stale && !modes[j]->is_new_fit()) {
 				continue;
 			}
 			/*
-			 I used to compare new_prob against prev, which was set to
-			 inst.minfo[inst.mode].prob, but I'm pretty sure that's wrong.
-			 The task here is to set best_stale to true if
-			   - P(inst j is mode m) decreases, and m is the current best mode, or
-			   - P(inst j is mode m) increases, and m is not the current best mode
+			 Set best_stale to true if
+			   - Error(m, j) increases, and m is the current best mode, or
+			   - Error(m, j) decreases, and m is not the current best mode
 			*/
-			double new_prob, error;
-			new_prob = modes[j]->calc_prob(d.target, *d.sig, d.x, d.y(0), noise_var, m.sig_map, error);
-			assert(new_prob == 0.0 || m.sig_map.size() == modes[j]->get_sig().size());
-			if ((inst.mode == j && new_prob < m.prob) || (inst.mode != j && new_prob > m.prob)) {
+			double new_error;
+			new_error = modes[j]->calc_error(d.target, *d.sig, d.x, d.y(0), noise_var, m.sig_map);
+			assert(is_inf(new_error) || m.sig_map.size() == modes[j]->get_sig().size());
+			if ((inst.mode == j && new_error > m.error) || (inst.mode != j && new_error < m.error)) {
 				best_stale = true;
 			}
-			m.prob = new_prob;
-			m.prob_stale = false;
+			m.error = new_error;
+			m.error_stale = false;
 		}
 		if (best_stale) {
 			int prev = inst.mode, best = 0;
 			for (int j = 1, jend = modes.size(); j < jend; ++j) {
-				double p1 = inst.minfo[j].prob;
-				double p2 = inst.minfo[best].prob;
+				double j_error = inst.minfo[j].error;
+				double best_error = inst.minfo[best].error;
 				/*
 				 These conditions look awkward, but have justification. If I tested the >
 				 condition before the approx_equal condition, the test would succeed even
-				 if the probability of j was only slightly better than the probability of
-				 best.
+				 if the error of j was only slightly better than the best error
 				*/
-				if (approx_equal(p1, p2, 0.001 * min(p1, p2))) {
+				if (approx_equal(j_error, best_error, 0.001 * min(j_error, best_error))) {
 					if (modes[j]->get_num_nonzero_coefs() < modes[best]->get_num_nonzero_coefs()) {
 						best = j;
 					}
-				} else if (inst.minfo[j].prob > inst.minfo[best].prob) {
+				} else if (j_error < best_error) {
 					best = j;
 				}
+			}
+			if (inst.minfo[best].error > sqrt(noise_var) * NUM_STDEVS_THRESH) {
+				best = 0;
 			}
 			if (best != prev) {
 				inst.mode = best;
@@ -597,18 +597,15 @@ bool EM::run(int maxiters) {
 	return false;
 }
 
-int EM::best_mode(int target, const scene_sig &sig, const rvec &x, double y, double &besterror) const {
+int EM::best_mode(int target, const scene_sig &sig, const rvec &x, double y, double &best_error) const {
 	int best = -1;
-	double best_prob = 0.0;
-	rvec py;
-	vector<int> assign;
 	double error;
+	vector<int> assign;
 	for (int i = 0, iend = modes.size(); i < iend; ++i) {
-		double p = modes[i]->calc_prob(target, sig, x, y, noise_var, assign, error);
-		if (best == -1 || p > best_prob) {
+		error = modes[i]->calc_error(target, sig, x, y, noise_var, assign);
+		if (best == -1 || error < best_error) {
 			best = i;
-			best_prob = p;
-			besterror = error;
+			best_error = error;
 		}
 	}
 	return best;
@@ -633,19 +630,12 @@ void EM::proxy_get_children(map<string, cliproxy*> &c) {
 	c["learn_modes"] = new bool_proxy(&learn_new_modes, "Learn new modes.");
 	c["noise_var"] =   new float_proxy(&noise_var, "Expected variance of environment noise.");
 	
-	c["ptable"] =      new memfunc_proxy<EM>(this, &EM::cli_ptable);
+	c["error_table"] = new memfunc_proxy<EM>(this, &EM::cli_error_table);
 	c["add_mode"] =    new memfunc_proxy<EM>(this, &EM::cli_add_mode);
 }
 
-void EM::cli_ptable(ostream &os) const {
-	table_printer t;
-	for (int i = 0, iend = insts.size(); i < iend; ++i) {
-		t.add_row() << i << insts[i]->mode;
-		for (int j = 0, jend = modes.size(); j < jend; ++j) {
-			t << insts[i]->minfo[j].prob;
-		}
-	}
-	t.print(os);
+void EM::cli_error_table(ostream &os) const {
+	print_error_table(os);
 }
 
 /*
@@ -732,13 +722,13 @@ void EM::unserialize(istream &is) {
 	}
 }
 
-void EM::print_ptable(ostream &os) const {
+void EM::print_error_table(ostream &os) const {
 	table_printer t;
 	for (int i = 0, iend = insts.size(); i < iend; ++i) {
 		inst_info *inst = insts[i];
 		t.add_row() << i << inst->mode;
-		for (int j = 0, jend = inst->minfo.size(); j < jend; ++j) {
-			t << inst->minfo[j].prob;
+		for (int j = 1, jend = inst->minfo.size(); j < jend; ++j) {
+			t << inst->minfo[j].error;
 		}
 	}
 	t.print(os);
@@ -768,11 +758,11 @@ void inst_info::unserialize(istream &is) {
 }
 
 void inst_info::mode_info::serialize(ostream &os) const {
-	serializer(os) << prob << prob_stale << sig_map;
+	serializer(os) << error << error_stale << sig_map;
 }
 
 void inst_info::mode_info::unserialize(istream &is) {
-	unserializer(is) >> prob >> prob_stale >> sig_map;
+	unserializer(is) >> error >> error_stale >> sig_map;
 }
 
 int EM::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &obj_map) {
