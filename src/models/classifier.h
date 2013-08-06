@@ -2,25 +2,27 @@
 #define CLASSIFIER_H
 
 #include <vector>
-#include "lda.h"
 #include "relation.h"
 #include "foil.h"
 #include "serializable.h"
 #include "scene_sig.h"
 #include "model.h"
 #include "cliproxy.h"
+#include "timer.h"
+#include "numeric_classifier.h"
 
 class logger_set;
 
 class clause_info : public serializable {
 public:
-	clause_info() : nc(NULL) {}
+	clause_info() : nc_type("none"), nc(NULL) {}
 	~clause_info() { if (nc) { delete nc; } }
 	
 	clause cl;
 	relation false_pos;
 	relation true_pos;
-	num_classifier *nc;
+	std::string nc_type;
+	numeric_classifier *nc;
 	
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
@@ -33,7 +35,7 @@ public:
 	~binary_classifier();
 
 	int vote(int target, const scene_sig &sig, const relation_table &rels, const rvec &x) const;
-	void update(const relation &pos, const relation &neg, const relation_table &rels, const model_train_data &train_data, bool use_foil, bool prune, int nc_type);
+	void update(const relation &pos, const relation &neg, const relation_table &rels, const model_train_data &train_data, bool use_foil, bool prune, const std::string &nc_type);
 	
 	void inspect(std::ostream &os) const;
 	void inspect_detailed(std::ostream &os) const;
@@ -46,7 +48,8 @@ private:
 	std::vector<clause_info> clauses;
 	
 	relation false_negatives, true_negatives;
-	num_classifier *neg_nc;
+	std::string neg_nc_type;
+	numeric_classifier *neg_nc;
 
 	mutable timer_set timers;
 	logger_set *loggers;
@@ -60,8 +63,6 @@ public:
 	classifier(const model_train_data &data, logger_set *loggers);
 	~classifier();
 	
-	void set_options(bool foil, bool prune, bool context, int nc_type);
-
 	void add_class();
 	void del_classes(const std::vector<int> &c);
 	
@@ -100,12 +101,12 @@ private:
 	std::vector<class_info*> classes;
 	
 	bool foil, prune, context;
-	int nc_type;
+	std::string nc_type;
 	
 	// Option values since last classifier update.
 	// If they're different from the current values, force an update.
 	bool old_foil, old_prune, old_context;
-	int old_nc_type;
+	std::string old_nc_type;
 	
 	logger_set *loggers;
 

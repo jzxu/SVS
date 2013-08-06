@@ -15,7 +15,6 @@
 #include "params.h"
 #include "mat.h"
 #include "serialize.h"
-#include "lda.h"
 #include "drawer.h"
 #include "logger.h"
 

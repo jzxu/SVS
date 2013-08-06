@@ -163,7 +163,7 @@ int argmax(const std::vector<T> &v) {
 		return -1;
 	}
 	int m = 0;
-	for (int i = 1; i < v.size(); ++i) {
+	for (int i = 1, iend = v.size(); i < iend; ++i) {
 		if (v[i] > v[m]) {
 			m = i;
 		}

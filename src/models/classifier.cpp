@@ -34,7 +34,7 @@ void extract_vec(const int_tuple &t, const rvec &x, const scene_sig &sig, rvec &
 /*
  positive = class 0, negative = class 1
 */
-num_classifier *learn_numeric_classifier(int type, const relation &pos, const relation &neg, const model_train_data &data) {
+numeric_classifier *learn_numeric_classifier(const string &type, const relation &pos, const relation &neg, const model_train_data &data) {
 	int npos = pos.size(), nneg = neg.size();
 	if (npos < 2 || nneg < 2) {
 		return NULL;
@@ -69,17 +69,17 @@ num_classifier *learn_numeric_classifier(int type, const relation &pos, const re
 		classes.push_back(1);
 	}
 	
-	num_classifier *nc = new num_classifier(type);
+	numeric_classifier *nc = make_numeric_classifier(type);
 	nc->learn(train, classes);
 	return nc;
 }
 
 binary_classifier::binary_classifier()
-: const_vote(0), neg_nc(NULL), loggers(NULL)
+: const_vote(0), neg_nc_type("none"), neg_nc(NULL), loggers(NULL)
 {}
 
 binary_classifier::binary_classifier(logger_set *loggers)
-: const_vote(0), neg_nc(NULL), loggers(loggers)
+: const_vote(0), neg_nc_type("none"), neg_nc(NULL), loggers(loggers)
 {}
 
 binary_classifier::~binary_classifier() {
@@ -91,13 +91,28 @@ binary_classifier::~binary_classifier() {
 void binary_classifier::serialize(ostream &os) const {
 	serializer(os) << const_vote << clauses 
 	               << false_negatives << true_negatives
-	               << neg_nc;
+				   << neg_nc_type;
+	if (neg_nc_type == "none") {
+		assert(!neg_nc);
+	} else {
+		assert(neg_nc);
+		neg_nc->serialize(os);
+	}
 }
 
 void binary_classifier::unserialize(istream &is) {
 	unserializer(is) >> const_vote >> clauses 
 	                 >> false_negatives >> true_negatives
-	                 >> neg_nc;
+	                 >> neg_nc_type;
+	if (neg_nc_type == "none") {
+		if (neg_nc) {
+			delete neg_nc;
+			neg_nc = NULL;
+		}
+	} else {
+		neg_nc = make_numeric_classifier(neg_nc_type);
+		neg_nc->unserialize(is);
+	}
 }
 
 void binary_classifier::inspect(ostream &os) const {
@@ -179,7 +194,7 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 		
 		for (int i = 0, iend = clauses.size(); i < iend; ++i) {
 			const clause &cl = clauses[i].cl;
-			const num_classifier *nc = clauses[i].nc;
+			const numeric_classifier *nc = clauses[i].nc;
 			if (test_clause(cl, rels, domains)) {
 				loggers->get(LOG_EM) << "matched clause:" << endl << cl << endl;
 				var_domains::const_iterator vi, viend;
@@ -211,13 +226,14 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 	return 1;
 }
 
-void binary_classifier::update(const relation &mem_i, const relation &mem_j, const relation_table &rels, const model_train_data &data, bool use_foil, bool prune, int nc_type) {
+void binary_classifier::update(const relation &mem_i, const relation &mem_j, const relation_table &rels, const model_train_data &data, bool use_foil, bool prune, const string &nc_type) {
 	function_timer t(timers.get_or_add("update"));
 	
 	clauses.clear();
 	if (neg_nc) {
 		delete neg_nc;
 		neg_nc = NULL;
+		neg_nc_type = "none";
 	}
 	
 	const_vote = mem_i.size() > mem_j.size() ? 0 : 1;
@@ -254,35 +270,52 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 	 Also train a numeric classifier to catch misclassified members of
 	 i (false negatives for the entire clause vector).
 	*/
-	if (nc_type != NC_NONE) {
+	if (nc_type != "none") {
 		for (int k = 0, kend = clauses.size(); k < kend; ++k) {
 			if (clauses[k].nc) {
 				delete clauses[k].nc;
 				clauses[k].nc = NULL;
+				clauses[k].nc_type = "none";
 			}
 			double fp = clauses[k].false_pos.size(), tp = clauses[k].true_pos.size();
 			if (fp / (fp + tp) > .5) {
 				clauses[k].nc = learn_numeric_classifier(nc_type, clauses[k].true_pos, clauses[k].false_pos, data);
+				clauses[k].nc_type = nc_type;
 			}
 		}
 		
 		double fn = false_negatives.size(), tn = true_negatives.size();
 		if (fn / (fn + tn) > .5) {
 			neg_nc = learn_numeric_classifier(nc_type, true_negatives, false_negatives, data);
+			neg_nc_type = nc_type;
 		}
 	}
 }
 
 void clause_info::serialize(ostream &os) const {
-	serializer(os) << cl << false_pos << true_pos << nc;
+	serializer(os) << cl << false_pos << true_pos << nc_type;
+	if (nc_type == "none") {
+		assert(!nc);
+	} else {
+		nc->serialize(os);
+	}
 }
 
 void clause_info::unserialize(istream &is) {
-	unserializer(is) >> cl >> false_pos >> true_pos >> nc;
+	unserializer(is) >> cl >> false_pos >> true_pos >> nc_type;
+	if (nc_type == "none") {
+		if (nc) {
+			delete nc;
+			nc = NULL;
+		}
+	} else {
+		nc = make_numeric_classifier(nc_type);
+		nc->unserialize(is);
+	}
 }
 
 classifier::classifier(const model_train_data &data, logger_set *loggers) 
-: data(data), foil(true), prune(true), context(true), nc_type(NC_LDA), loggers(loggers)
+: data(data), foil(true), prune(true), context(true), nc_type("dtree"), loggers(loggers)
 {
 	old_foil = foil;
 	old_prune = prune;
@@ -307,25 +340,16 @@ void classifier::cli_nc_type(const vector<string> &args, ostream &os) {
 	static const char *names[] = { "none", "dtree", "lda", "sign" };
 	
 	if (args.empty()) {
-		os << names[nc_type] << endl;
+		os << nc_type << endl;
 	} else {
+		nc_type = args[0];
 		for (int i = 0, iend = sizeof(names) / sizeof(names[0]); i < iend; ++i) {
 			if (args[0] == names[i]) {
-				nc_type = i;
+				nc_type = names[i];
 				return;
 			}
 		}
 		os << "invalid numeric classifier type" << endl;
-	}
-}
-
-void classifier::set_options(bool foil, bool prune, bool context, int nc_type) {
-	foil = foil;
-	prune = prune;
-	context = context;
-	nc_type = nc_type;
-	for (int i = 0, iend = classes.size(); i < iend; ++i) {
-		classes[i]->stale = true;
 	}
 }
 

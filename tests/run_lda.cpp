@@ -5,15 +5,12 @@
 #include <vector>
 #include <map>
 #include "common.h"
-#include "foil.h"
-#include "serialize.h"
-#include "linear.h"
 #include "mat.h"
-#include "lda.h"
+#include "numeric_classifier.h"
+#include "serialize.h"
 
 using namespace std;
 
-num_classifier *make_classifier();
 void read_data(const char *path, mat &X, vector<int> &classes);
 void run_print(int first, int argc, char *argv[]);
 void run_test_set(int first, int argc, char *argv[]);
@@ -65,18 +62,6 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
-num_classifier *make_classifier() {
-	if (strcmp(classifier_type, "lda") == 0) {
-		return new num_classifier(NC_LDA);
-	} else if (strcmp(classifier_type, "sign") == 0) {
-		return new num_classifier(NC_SIGN);
-	} else if (strcmp(classifier_type, "dtree") == 0) {
-		return new num_classifier(NC_DTREE);
-	}
-	cerr << "no such classifier type" << endl;
-	return NULL;
-}
-
 void read_data(const char *path, mat &X, vector<int> &classes) {
 	string line;
 	vector<string> fields;
@@ -122,13 +107,13 @@ void read_data(const char *path, mat &X, vector<int> &classes) {
 void run_print(int first, int argc, char *argv[]) {
 	mat data;
 	vector<int> classes;
-	num_classifier *cls = make_classifier();
 	
 	if (first >= argc) {
 		cerr << "specify training file" << endl;
 		exit(1);
 	}
 	
+	numeric_classifier *cls = make_numeric_classifier(classifier_type);
 	read_data(argv[first], data, classes);
 	cls->learn(data, classes);
 	cls->inspect(cout);
@@ -142,14 +127,14 @@ void run_test_set(int first, int argc, char *argv[]) {
 	mat Xtrain, Xtest;
 	
 	if (first + 1 >= argc) {
-		cerr << "specify training and test files" << endl;
+		cerr << "usage: <training file> <test files>" << endl;
 		exit(1);
 	}
 	
+	numeric_classifier *cls = make_numeric_classifier(classifier_type);
 	read_data(argv[first], Xtrain, train_classes);
 	read_data(argv[first+1], Xtest, test_classes);
 	
-	num_classifier *cls = make_classifier();
 	cls->learn(Xtrain, train_classes);
 	
 	int correct = 0;
@@ -168,7 +153,7 @@ void run_cross_validation(int first, int argc, char *argv[]) {
 	int n, k, chunksize, extra, start, ndata, ncols, correct;
 	
 	if (first >= argc) {
-		cerr << "specify training file" << endl;
+		cerr << "usage: <training file> [n]" << endl;
 		exit(1);
 	}
 	
@@ -176,8 +161,8 @@ void run_cross_validation(int first, int argc, char *argv[]) {
 	ndata = data.rows();
 	ncols = data.cols();
 	
-	if (first + 1 < argc) {
-		if (!parse_int(argv[first+1], n)) {
+	if (first + 2 < argc) {
+		if (!parse_int(argv[first+2], n)) {
 			cerr << "invalid n" << endl;
 			exit(1);
 		}
@@ -213,7 +198,7 @@ void run_cross_validation(int first, int argc, char *argv[]) {
 			}
 		}
 
-		num_classifier *cls = make_classifier();
+		numeric_classifier *cls = make_numeric_classifier(classifier_type);
 		cls->learn(train, train_classes);
 		
 		for (int j = 0; j < k; ++j) {
@@ -232,22 +217,17 @@ void run_cross_validation(int first, int argc, char *argv[]) {
 void run_serialize(int first, int argc, char *argv[]) {
 	mat data;
 	vector<int> classes;
-	num_classifier *cls = make_classifier();
-	
-	if (first >= argc) {
-		cerr << "specify training file" << endl;
-		exit(1);
-	}
 	
 	if (first + 1 >= argc) {
-		cerr << "specify output file" << endl;
+		cerr << "specify training file and output file" << endl;
 		exit(1);
 	}
 	
-	read_data(argv[first], data, classes);
+	numeric_classifier *cls = make_numeric_classifier(classifier_type);
+	read_data(argv[first+1], data, classes);
 	cls->learn(data, classes);
 	
-	ofstream out(argv[first + 1]);
+	ofstream out(argv[first + 2]);
 	cls->serialize(out);
 	out.close();
 	

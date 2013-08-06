@@ -11,7 +11,6 @@
 #include "relation.h"
 #include "mat.h"
 #include "scene_sig.h"
-#include "lda.h"
 #include "classifier.h"
 #include "mode.h"
 #include "cliproxy.h"
