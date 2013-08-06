@@ -837,6 +837,14 @@ bool relation::check_size() const {
 	return sz == s;
 }
 
+void relation::print_condensed(ostream &os) const {
+	tuple_map::const_iterator i, iend;
+	for (i = tuples.begin(), iend = tuples.end(); i != iend; ++i) {
+		join(os, i->first, ", ");
+		os << " -> " << i->second << endl;
+	}
+}
+
 ostream &operator<<(ostream &os, const relation &r) {
 	relation::const_iterator i, end;
 	for (i = r.begin(), end = r.end(); i != end; ++i) {
@@ -852,6 +860,15 @@ ostream &operator<<(ostream &os, const relation_table &t) {
 		os << i->first << endl << i->second;
 	}
 	return os;
+}
+
+void print_relation_table_condensed(const relation_table &t, ostream &os) {
+	relation_table::const_iterator i, iend;
+	for (i = t.begin(), iend = t.end(); i != iend; ++i) {
+		os << i->first << endl;
+		i->second.print_condensed(os);
+		os << endl;
+	}
 }
 
 relation::iter::iter(const relation &r, bool begin)

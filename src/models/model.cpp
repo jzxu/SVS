@@ -552,7 +552,7 @@ void model_train_data::cli_relations(const vector<string> &args, ostream &os) co
 	}
 	
 	if (i >= args.size()) {
-		os << *rels << endl;
+		print_relation_table_condensed(*rels, os);
 		return;
 	}
 	const relation *r = map_getp(*rels, args[i]);
