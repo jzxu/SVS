@@ -170,8 +170,10 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 	cvec dummy;
 
 	holdout_size = X.rows() * .3;
-	if (holdout_size == 0)
-		holdout_size = 1;
+	if (holdout_size < 2) {
+		holdout_size = 2;
+		assert(holdout_size < X.rows());
+	}
 	holdin_size = X.rows() - holdout_size;
 	Xin.resize(holdin_size, X.cols());
 	Yin.resize(holdin_size, Y.cols());
@@ -270,7 +272,7 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 				fit_set.push_back(j);
 			}
 		}
-		if (fit_set.size() > subset.size()) {
+		if (fit_set.size() > 2 && fit_set.size() > subset.size()) {
 			mat Xsub, Ysub;
 			pick_rows(X, fit_set, Xsub);
 			pick_rows(Y, fit_set, Ysub);
