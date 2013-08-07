@@ -289,14 +289,18 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 			double fp = clauses[k].false_pos.size(), tp = clauses[k].true_pos.size();
 			if (fp / (fp + tp) > .5) {
 				clauses[k].nc = learn_numeric_classifier(nc_type, clauses[k].true_pos, clauses[k].false_pos, data);
-				clauses[k].nc_type = nc_type;
+				if (clauses[k].nc) {
+					clauses[k].nc_type = nc_type;
+				}
 			}
 		}
 		
 		double fn = false_negatives.size(), tn = true_negatives.size();
 		if (fn / (fn + tn) > .5) {
 			neg_nc = learn_numeric_classifier(nc_type, true_negatives, false_negatives, data);
-			neg_nc_type = nc_type;
+			if (neg_nc) {
+				neg_nc_type = nc_type;
+			}
 		}
 	}
 }
@@ -306,6 +310,7 @@ void clause_info::serialize(ostream &os) const {
 	if (nc_type == "none") {
 		assert(!nc);
 	} else {
+		assert(nc);
 		nc->serialize(os);
 	}
 }
