@@ -22,30 +22,20 @@ void clause_vars(const clause &c, vector<int> &vars) {
 	sort(vars.begin(), vars.end());
 }
 
-class csp_node {
+class CSP_node {
 public:
-	csp_node() {}
-
-	csp_node(const csp_node &par)
-	: vars(par.vars), constraints(par.constraints), num_unassigned(par.num_unassigned)
-	{}
-
-	bool init(const clause &c, const relation_table &rels, const var_domains &domains) {
-		vector<int> all_vars;
-		
+	CSP_node(const clause &c, const relation_table &rels) {
 		/*
-		 Fill out variable information, and remap variables to a consecutive list 0 .. nvars-1
+		 Remap variables to a consecutive list 0 .. nvars-1
 		*/
+		vector<int> all_vars;
 		clause_vars(c, all_vars);
 		num_unassigned = all_vars.size();
 		vars.resize(num_unassigned);
 		for (int i = 0, iend = vars.size(); i < iend; ++i) {
-			int v = all_vars[i];
-			vars[i].label = v;
-			if (has(domains, v) && !map_get(domains, v).empty()) {
-				vars[i].infinite_domain = false;
-				vars[i].domain = map_get(domains, v);
-			}
+			vars[i].label = all_vars[i];
+			vars[i].value = -1;
+			vars[i].infinite_domain = true;
 		}
 
 		/*
@@ -54,6 +44,24 @@ public:
 		constraints.resize(c.size());
 		for (int i = 0, iend = c.size(); i < iend; ++i) {
 			literal_to_constraint(c[i], rels, constraints[i]);
+		}
+	}
+
+	CSP_node(const CSP_node &par)
+	: vars(par.vars), constraints(par.constraints), num_unassigned(par.num_unassigned)
+	{}
+
+	bool init_var_domains(const var_domains &domains) {
+		for (int i = 0, iend = vars.size(); i < iend; ++i) {
+			var_info &vi = vars[i];
+			vi.domain.clear();
+			vi.infinite_domain = true;
+			vi.value = -1;
+			const set<int> *d = map_getp(domains, vars[i].label);
+			if (d && !d->empty()) {
+				vars[i].infinite_domain = false;
+				vars[i].domain = *d;
+			}
 		}
 		for (int i = 0, iend = constraints.size(); i < iend; ++i) {
 			constraint_info &cons = constraints[i];
@@ -89,7 +97,7 @@ public:
 		assert(!vars[mrv].infinite_domain);
 		interval_set::const_iterator i, end;
 		for (i = vars[mrv].domain.begin(), end = vars[mrv].domain.end(); i != end; ++i) {
-			csp_node child(*this);
+			CSP_node child(*this);
 			if (child.assign(mrv, *i) && child.search(out)) {
 				return true;
 			}
@@ -111,8 +119,6 @@ private:
 		bool infinite_domain;  // variable can be any value
 		int label;
 		int value;
-
-		var_info() : label(-1), value(-1), infinite_domain(true) {}
 	};
 
 	vector<var_info>        vars;
@@ -120,25 +126,31 @@ private:
 	int num_unassigned;
 	
 	int get_var_by_label(int label) {
-		int i;
-		for (i = 0; i < vars.size() && vars[i].label != label; ++i)
+		int i, iend;
+		for (i = 0, iend = vars.size(); i < iend && vars[i].label != label; ++i)
 			;
-		assert(i < vars.size());
+		assert(i < iend);
 		return i;
 	}
 	
 	void literal_to_constraint(const literal &l, const relation_table &rels, constraint_info &cons) {
 		const int_tuple &args = l.get_args();
-		const relation &r = map_get(rels, l.get_name());
+		const relation *r = map_getp(rels, l.get_name());
+		if (r) {
+			cons.tuples = *r;
+		} else {
+			cons.tuples.reset(args.size());
+		}
 		cons.negated = l.negated();
-		cons.tuples = r;
 		cons.doms.resize(args.size());
 		cons.vars.resize(args.size());
 		cons.num_unassigned = 0;
 		for (int i = 0, iend = args.size(); i < iend; ++i) {
 			if (args[i] >= 0) {
 				cons.vars[i] = get_var_by_label(args[i]);
-				r.at_pos(i, cons.doms[i]);
+				if (r) {
+					r->at_pos(i, cons.doms[i]);
+				}
 				++cons.num_unassigned;
 			} else {
 				cons.vars[i] = -1;
@@ -240,6 +252,55 @@ private:
 	}
 };
 
+CSP::CSP(const clause &c, const relation_table &rels) {
+	master = new CSP_node(c, rels);
+}
+
+CSP::~CSP() {
+	delete master;
+}
+
+bool CSP::solve(var_domains &domains) const {
+	CSP_node root(*master);
+	map<int, int> solution;
+	map<int, int>::const_iterator i, iend;
+
+	root.init_var_domains(domains);
+	if (!root.search(solution))
+		return false;
+
+	for (i = solution.begin(), iend = solution.end(); i != iend; ++i) {
+		domains[i->first].clear();
+		domains[i->first].insert(i->second);
+	}
+	return true;
+}
+
+/*
+ domains initially contains the variable values of a partial solution. On
+ successful return, domains will be extended to hold the values of the
+ previously unspecified variables from the solution.
+*/
+bool CSP::solve(int_tuple &domains) const {
+	var_domains d;
+	for (int i = 0, iend = domains.size(); i < iend; ++i) {
+		d[i].insert(domains[i]);
+	}
+	if (solve(d)) {
+		var_domains::const_iterator i, iend;
+		for (i = d.begin(), iend = d.end(); i != iend; ++i) {
+			if (i->first < domains.size()) {
+				assert(*i->second.begin() == domains[i->first]);
+			} else {
+				assert(i->first == domains.size());
+				domains.push_back(*i->second.begin());
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
 /*
  A search tree structure used in FOIL::choose_literal
 */
@@ -270,48 +331,22 @@ private:
 };
 
 bool test_clause(const clause &c, const relation_table &rels, var_domains &domains) {
-	csp_node csp;
-	if (!csp.init(c, rels, domains)) {
-		return false;
-	}
-	map<int, int> assign;
-	if (!csp.search(assign)) {
-		return false;
-	}
-	map<int, int>::const_iterator i;
-	for (i = assign.begin(); i != assign.end(); ++i) {
-		domains[i->first].clear();
-		domains[i->first].insert(i->second);
-	}
-	return true;
-}
-
-bool test_clause(const clause &c, const relation_table &rels, int_tuple &domains) {
-	var_domains d;
-	for (int i = 0, iend = domains.size(); i < iend; ++i) {
-		d[i].insert(domains[i]);
-	}
-	if (test_clause(c, rels, d)) {
-		for (int i = domains.size(), iend = d.size(); i < iend; ++i) {
-			assert(d[i].size() == 1);
-			domains.push_back(*d[i].begin());
-		}
-		return true;
-	}
-	return false;
+	CSP csp(c, rels);
+	return csp.solve(domains);
 }
 
 int test_clause_n(const clause &c, bool pos, const relation &tests, const relation_table &rels, relation *correct) {
 	int ncorrect = 0;
 	relation::const_iterator i, iend;
 	var_domains d;
+	CSP csp(c, rels);
 	
 	for (i = tests.begin(), iend = tests.end(); i != iend; ++i) {
 		d.clear();
 		for (int j = 0, jend = i->size(); j < jend; ++j) {
 			d[j].insert((*i)[j]);
 		}
-		if (test_clause(c, rels, d) == pos) {
+		if (csp.solve(d) == pos) {
 			++ncorrect;
 			if (correct) {
 				correct->add(*i);
@@ -604,9 +639,10 @@ bool FOIL::learn(bool prune, bool record_errors) {
 			// this repeats computation, make more efficient
 			relation covered_pos(train_dim);
 			relation::const_iterator i, iend;
+			CSP csp(ci.cl, *rels);
 			for (i = pos_left.begin(), iend = pos_left.end(); i != iend; ++i) {
 				int_tuple t = *i;
-				if (test_clause(ci.cl, *rels, t)) {
+				if (csp.solve(t)) {
 					covered_pos.add(*i);
 					if (record_errors) {
 						ci.true_positives.add(t);
@@ -616,7 +652,7 @@ bool FOIL::learn(bool prune, bool record_errors) {
 			if (record_errors) {
 				for (i = neg_test.begin(), iend = neg_test.end(); i != iend; ++i) {
 					int_tuple t = *i;
-					if (test_clause(ci.cl, *rels, t)) {
+					if (csp.solve(t)) {
 						ci.false_positives.add(t);
 					}
 				}

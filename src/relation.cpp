@@ -37,6 +37,20 @@ void unify_interval_vecs(const interval_vec &v1, const interval_vec &v2, interva
 	p2 = v2.begin();
 	e2 = v2.end();
 	
+	if (p1 == e1) {
+		r = v2;
+		return;
+	}
+	if (p2 == e2) {
+		r = v1;
+		return;
+	}
+	if (p1->first < p2->first) {
+		i = *p1++;
+	} else {
+		i = *p2++;
+	}
+
 	while (p1 != e1 || p2 != e2) {
 		if (p1 != e1 && (p2 == e2 || p1->first < p2->first)) {
 			j = *p1++;
@@ -44,15 +58,15 @@ void unify_interval_vecs(const interval_vec &v1, const interval_vec &v2, interva
 			j = *p2++;
 		}
 		
-		if (i.first > i.last) {
-			// first time
-			i = j;
-		} else if (i.last >= j.first - 1) {
-			i.last = max(i.last, j.last);
-		} else {
+		// i.first <= j.first
+
+		if (i.last < j.first - 1) {
 			r.push_back(i);
 			i = j;
+		} else if (i.last < j.last) {
+			i.last = j.last;
 		}
+		// otherwise, i completely covers j, so we can just ignore j
 	}
 	r.push_back(i);
 }
@@ -676,13 +690,13 @@ void relation::del(int i, int n) {
 
 void relation::at_pos(int n, interval_set &elems) const {
 	assert(0 <= n && n < arty);
-	tuple_map::const_iterator i;
+	tuple_map::const_iterator i, iend;
 	if (n == 0) {
-		for (i = tuples.begin(); i != tuples.end(); ++i) {
+		for (i = tuples.begin(), iend = tuples.end(); i != iend; ++i) {
 			elems.unify(i->second);
 		}
 	} else {
-		for (i = tuples.begin(); i != tuples.end(); ++i) {
+		for (i = tuples.begin(), iend = tuples.end(); i != iend; ++i) {
 			elems.insert(i->first[n - 1]);
 		}
 	}

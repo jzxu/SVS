@@ -100,8 +100,25 @@ private:
 	logger_set *loggers;
 };
 
+class CSP_node;
 typedef std::map<int, std::set<int> > var_domains;
-bool test_clause(const clause &c, const relation_table &rels, var_domains &domains);
+
+/*
+ This class holds a CSP_node that is created from the clause and relations so
+ that it doesn't have to be reconstructed each time you solve the same CSP with
+ a different domain.
+*/
+class CSP {
+public:
+	CSP(const clause &c, const relation_table &rels);
+	~CSP();
+	bool solve(var_domains &domains) const;
+	bool solve(int_tuple &domains) const;
+
+private:
+	CSP_node *master;
+};
+
 void clause_success_rate(const clause &c, const relation &pos, const relation &neg, const relation_table &rels, double &success_rate, double &fp_rate, double &fn_rate);
 
 #endif

@@ -33,6 +33,14 @@ void extract_vec(const int_tuple &t, const rvec &x, const scene_sig &sig, rvec &
 
 /*
  positive = class 0, negative = class 1
+
+ For now, only learn numeric classifiers on the properties of the target
+ object. This is because it's hard to line up the other objects across
+ different signatures: consider that we're trying to distinguish between
+ different modes here, and different modes have different sets of relevant
+ objects. How do we fit these disparate rows continuous properties into a
+ single matrix? Therefore, I'm side-stepping the issue and considering only the
+ target object.
 */
 numeric_classifier *learn_numeric_classifier(const string &type, const relation &pos, const relation &neg, const model_train_data &data) {
 	int npos = pos.size(), nneg = neg.size();
@@ -195,7 +203,8 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 		for (int i = 0, iend = clauses.size(); i < iend; ++i) {
 			const clause &cl = clauses[i].cl;
 			const numeric_classifier *nc = clauses[i].nc;
-			if (test_clause(cl, rels, domains)) {
+			CSP csp(cl, rels);
+			if (csp.solve(domains)) {
 				loggers->get(LOG_EM) << "matched clause:" << endl << cl << endl;
 				var_domains::const_iterator vi, viend;
 				for (vi = domains.begin(), viend = domains.end(); vi != viend; ++vi) {

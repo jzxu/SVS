@@ -178,7 +178,8 @@ bool em_mode::map_objs(int target, const scene_sig &dsig, const relation_table &
 		} else {
 			bool found = false;
 			for (int j = 0, jend = obj_clauses[i].size(); j < jend; ++j) {
-				if (test_clause(obj_clauses[i][j], rels, domains)) {
+				CSP csp(obj_clauses[i][j], rels);
+				if (csp.solve(domains)) {
 					assert(d.size() == 1);
 					mapping[i] = dsig.find_id(*d.begin());
 					found = true;
