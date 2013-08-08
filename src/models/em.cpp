@@ -588,6 +588,8 @@ bool EM::predict(int target, const scene_sig &sig, const relation_table &rels, c
 		if (mode > 0) {
 			modes[mode]->predict(sig, x, obj_map, y);
 			return true;
+		} else {
+			cout << "classification failure, mode = " << mode << endl;
 		}
 	}
 	
@@ -863,8 +865,7 @@ int EM::classify(int target, const scene_sig &sig, const relation_table &rels, c
 		return order[i];
 	}
 	
-	// should never reach here
-	assert(false);
+	fatal("Reached unreachable line in EM::classify");
 	return -1;
 }
 

@@ -496,6 +496,7 @@ void classifier::classify(int target, const scene_sig &sig, const relation_table
 	std::list<pair_info*>::const_iterator i, iend;
 	for (i = pairs.begin(), iend = pairs.end(); i != iend; ++i) {
 		const pair_info &p = **i;
+		loggers->get(LOG_EM) << "VOTE " << p.cls_i << " " << p.cls_j << endl;
 		int winner = p.clsfr->vote(target, sig, *r, x);
 		if (winner == 0) {
 			++votes[p.cls_i];

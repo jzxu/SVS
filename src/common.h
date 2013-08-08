@@ -17,13 +17,13 @@
 
 typedef std::vector<int> int_tuple;
 
-
 #ifdef NAN
 #undef NAN
 #endif
 extern const double NAN;
 extern const double INF;
 
+void fatal(const std::string &msg, int exit_code = 1);
 void split(const std::string &s, const std::string &delim, std::vector<std::string> &fields);
 void strip(std::string &s, const std::string &whitespace);
 
@@ -218,6 +218,7 @@ inline int sign(double x) {
 		return 0;
 	}
 }
+
 
 class table_printer {
 public:

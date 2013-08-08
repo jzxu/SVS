@@ -588,23 +588,12 @@ void model_train_data::cli_relations(const vector<string> &args, ostream &os) co
  Suitable for use with matlab.
 */
 void model_train_data::cli_contdata(const vector<string> &args, ostream &os) const {
-	int sig = 0;
-	if (args.size() > 0) {
-		if (!parse_int(args[0], sig)) {
-			os << "specify a valid signature index" << endl;
-			return;
-		}
-	}
-
 	table_printer t;
 	t.set_scientific(true);
 	t.set_precision(10);
 	for (int i = 0, iend = insts.size(); i < iend; ++i) {
 		const model_train_inst &d = *insts[i];
-		if (d.sig_index != sig) {
-			continue;
-		}
-		t.add_row();
+		t.add_row() << d.sig_index;
 		for (int j = 0, jend = d.x.size(); j < jend; ++j) {
 			t << d.x(j);
 		}

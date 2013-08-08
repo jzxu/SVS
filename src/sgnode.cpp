@@ -76,9 +76,9 @@ vec3 sgnode::get_trans(char type) const {
 			return rot;
 		case 's':
 			return scale;
-		default:
-			assert (false);
 	}
+	fatal("illegal transform type");
+	return vec3();
 }
 
 void sgnode::get_trans(vec3 &p, vec3 &r, vec3 &s) const {

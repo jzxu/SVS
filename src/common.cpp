@@ -12,6 +12,11 @@ using namespace std;
 const double NAN = std::numeric_limits<double>::quiet_NaN();
 const double INF = std::numeric_limits<double>::infinity();
 
+void fatal(const string &msg, int exit_code) {
+	cerr << msg << endl;
+	exit(exit_code);
+}
+
 void split(const string &s, const string &delim, vector<string> &fields) {
 	int start = 0, end = 0, sz = s.size();
 	while (end < sz) {
