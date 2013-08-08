@@ -62,6 +62,7 @@ public:
 	const_mat_view(const mat &m)                 : const_mat_map(m.data(), m.rows(), m.cols(), mat_stride(m.rowStride(), 1)) {}
 	const_mat_view(const rvec &v)                : const_mat_map(v.data(), 1, v.size(), mat_stride(1, 1)) {}
 	const_mat_view(const cvec &v)                : const_mat_map(v.data(), v.size(), 1, mat_stride(1, 1)) {}
+	const_mat_view(const vec3 &v)                : const_mat_map(v.data(), 3, 1, mat_stride(1, 1)) {}
 	const_mat_view(const mat &m, int r, int c)   : const_mat_map(m.data(), r, c, mat_stride(m.rowStride(), 1)) {}
 	
 	// for things like m.block
@@ -222,6 +223,7 @@ double dir_separation(const ptlist &a, const ptlist &b, const vec3 &u);
 
 void serialize  (const_mat_view m, std::ostream &os);
 void unserialize(mat &m,           std::istream &is);
+void unserialize(vec3 &v,          std::istream &is);
 void unserialize(rvec &v,          std::istream &is);
 void unserialize(cvec &v,          std::istream &is);
 

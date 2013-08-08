@@ -324,6 +324,10 @@ void unserialize(mat &m, istream &is) {
 	}
 }
 
+void unserialize(vec3 &v, istream &is) {
+	is >> v(0) >> v(1) >> v(2);
+}
+
 void unserialize(rvec &v, istream &is) {
 	mat m;
 	unserialize(m, is);

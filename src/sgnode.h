@@ -9,6 +9,7 @@
 #include "common.h"
 #include "mat.h"
 #include "cliproxy.h"
+#include "serializable.h"
 
 class sgnode_listener;
 class group_node;
@@ -17,7 +18,7 @@ class geometry_node;
 typedef std::map<std::string, std::string> string_properties_map;
 typedef std::map<std::string, double> numeric_properties_map;
 
-class sgnode : public cliproxy {
+class sgnode : public cliproxy, public serializable {
 	friend class group_node;
 	
 public:
@@ -87,7 +88,11 @@ public:
 	void set_property(const std::string& propertyName, double value);
 	void delete_property(const std::string& propertyName);
 
+	void serialize(std::ostream &os) const;
+	void unserialize(std::istream &is);
+
 protected:
+	sgnode() {} // for unserialization
 	void set_bounds(const bbox &b);
 	virtual void update_shape() = 0;
 	virtual sgnode *clone_sub() const = 0;
@@ -101,6 +106,9 @@ private:
 		std::string s = "";
 		send_update(t, s);
 	}
+
+	virtual void serialize_sub(std::ostream &os) const = 0;
+	virtual void unserialize_sub(std::istream &is) = 0;
 	
 	int         id;
 	std::string name;
@@ -152,10 +160,15 @@ public:
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 
 private:
+	group_node() {} // for unserialization
 	void update_shape();
 	void set_transform_dirty_sub();
 	sgnode* clone_sub() const;
+	void serialize_sub(std::ostream &os) const;
+	void unserialize_sub(std::istream &is);
 	
+	friend sgnode *unserialize_sgnode(std::istream &is);
+
 	std::vector<sgnode*> children;
 };
 
@@ -170,6 +183,9 @@ public:
 	void walk_geoms(std::vector<geometry_node*> &g);
 	void walk_geoms(std::vector<const geometry_node*> &g) const;
 	
+protected:
+	geometry_node(){}
+
 private:
 	virtual void gjk_local_support(const vec3 &dir, vec3 &support) const = 0;
 };
@@ -187,10 +203,15 @@ public:
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
 	
 private:
+	convex_node() {}  // only used in unserialization
 	void set_transform_dirty_sub();
 	void update_shape();
 	sgnode *clone_sub() const;
-	
+	void serialize_sub(std::ostream &os) const;
+	void unserialize_sub(std::istream &is);
+
+	friend sgnode *unserialize_sgnode(std::istream &is);
+
 	ptlist verts;
 	mutable ptlist world_verts;
 	mutable bool world_verts_dirty;
@@ -211,9 +232,14 @@ public:
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
 	
 private:
+	ball_node() {} // only used in unserialization
 	void update_shape();
 	sgnode *clone_sub() const;
-	
+	void serialize_sub(std::ostream &os) const;
+	void unserialize_sub(std::istream &is);
+
+	friend sgnode *unserialize_sgnode(std::istream &is);
+
 	double radius;
 };
 
@@ -224,5 +250,6 @@ public:
 
 double convex_distance(const sgnode *n1, const sgnode *n2);
 bool intersects(const sgnode *n1, const sgnode *n2);
+sgnode *unserialize_sgnode(std::istream &is);
 
 #endif

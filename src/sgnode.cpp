@@ -6,6 +6,7 @@
 #include "sgnode.h"
 #include "ccd/ccd.h"
 #include "params.h"
+#include "serialize.h"
 
 using namespace std;
 
@@ -615,3 +616,81 @@ void sgnode::delete_property(const std::string& propertyName){
 		send_update(sgnode::PROPERTY_DELETED, propertyName);
 	}
 }
+
+enum SerializeNodeTypeCode { GROUP_NODE, CONVEX_NODE, BALL_NODE };
+
+void sgnode::serialize(ostream &os) const {
+	serialize_sub(os);
+	serializer(os) << id << name << type << group << pos << rot << scale
+	               << string_props << numeric_props;
+}
+
+void sgnode::unserialize(istream &is) {
+	unserialize_sub(is);
+	unserializer(is) >> id >> name >> type >> group >> pos >> rot >> scale
+	                 >> string_props >> numeric_props;
+
+	shape_dirty = true;
+	bounds_dirty = true;
+	trans_dirty = true;
+}
+
+void group_node::serialize_sub(ostream &os) const {
+	serializer(os) << GROUP_NODE << children.size();
+
+	for (int i = 0, iend = children.size(); i < iend; ++i) {
+		children[i]->serialize(os);
+	}
+}
+
+void group_node::unserialize_sub(istream &is) {
+	int num_children;
+
+	unserializer(is) >> num_children;
+	for (int i = 0; i < num_children; ++i) {
+		sgnode *n = unserialize_sgnode(is);
+		attach_child(n);
+	}
+}
+
+void convex_node::serialize_sub(ostream &os) const {
+	serializer(os) << CONVEX_NODE << verts;
+}
+
+void convex_node::unserialize_sub(istream &is) {
+	unserializer(is) >> verts;
+	world_verts_dirty = true;
+}
+
+void ball_node::serialize_sub(ostream &os) const {
+	serializer(os) << BALL_NODE << radius;
+}
+
+void ball_node::unserialize_sub(istream &is) {
+	unserializer(is) >> radius;
+}
+
+sgnode *unserialize_sgnode(istream &is) {
+	int node_type;
+	sgnode *n;
+
+	unserializer(is) >> node_type;
+	switch (node_type) {
+		case GROUP_NODE:
+			n = new group_node();
+			break;
+		case CONVEX_NODE:
+			n = new convex_node();
+			break;
+		case BALL_NODE:
+			n = new ball_node();
+			break;
+		default:
+			fatal("illegal node type encountered in unserialization");
+			break;
+	}
+	
+	n->unserialize(is);
+	return n;
+}
+

@@ -151,9 +151,8 @@ void binary_classifier::inspect_detailed(ostream &os) const {
 		for (int k = 0; k < clauses.size(); ++k) {
 			os << "Clause: " << clauses[k].cl << endl;
 			
-			os << "True positives: ";
-			//print_first_arg(clauses[k].true_pos, os);
-			os << endl << clauses[k].true_pos;
+			os << "True positives: " << endl;
+			clauses[k].true_pos.print_condensed(os);
 			os << endl << endl;
 			
 			os << "False positives: ";
@@ -435,8 +434,10 @@ void classifier::update_class(int i, int old_class, int new_class) {
 }
 
 classifier::pair_info *classifier::find(int i, int j) {
-	assert(i < j);
-	
+	if (i >= j) {
+		return NULL;
+	}
+
 	std::list<pair_info*>::iterator pi, pend;
 	for (pi = pairs.begin(), pend = pairs.end(); pi != pend; ++pi) {
 		if ((**pi).cls_i == i && (**pi).cls_j == j) {
