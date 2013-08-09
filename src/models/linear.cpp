@@ -18,17 +18,6 @@ double RSS(const_mat_view X, const_mat_view y, const cvec &coefs, double interce
 	return ((y - X * coefs).array() - intercept).matrix().squaredNorm();
 }
 
-/*
- Mallows' Cp statistic
-
- This statistic estimates how well a linear model will perform on
- out-of-training examples.
-*/
-double MallowCp(const_mat_view X, const_mat_view y, const cvec &coefs, double intercept, double variance) {
-	int p = X.cols() + 1, N = X.rows();
-	double RSSp = RSS(X, y, coefs, intercept);
-	return RSSp / variance - N + 2 * p;
-}
 
 /* Assume that X is already centered */
 void pca(const_mat_view X, mat &comps) {
@@ -124,36 +113,111 @@ bool lasso(const_mat_view X, const_mat_view Y, mat &coefs) {
 }
 
 /*
+ Support functions for forward stepwise regression
+*/
+
+// Copy upper triangle into lower triangle
+void complete_symmetric_mat(mat &A) {
+	int n = A.rows();
+	assert(n == A.cols());
+
+	for (int i = 0; i < n; ++i) {
+		for (int j = i + 1; j < n; ++j) {
+			A(j, i) = A(i, j);
+		}
+	}
+}
+
+void sweep(const mat &A, int k, rvec &work, mat &B) {
+	int n = A.rows();
+	work = A.row(k).array() / A(k,k);
+	for (int i = 0; i < n; ++i) {
+		double Aik = A(i,k);
+		for (int j = i; j < n; ++j) {
+			B(i,j) = A(i,j) - Aik * work(j);
+		}
+	}
+	B.row(k) = A.row(k).array() / A(k,k);
+	B.col(k) = A.col(k).array() / A(k,k);
+	B(k,k) = -1.0 / A(k,k);
+	complete_symmetric_mat(B);
+}
+
+/*
+ Like sweep, but only fills out the last column. As long as the resulting
+ matrix B is not used for further sweeping, all the information required is in
+ the last column: the OLS coefficients and the RSS.
+*/
+void sweep_last_col(const mat &A, int k, mat &B) {
+	int n = A.rows(), last = n-1;
+	double x = A(k,last) / A(k,k);
+	for (int i = 0; i < n; ++i) {
+		B(i,last) = A(i,last) - A(i,k) * x;
+	}
+	B(k,last) = x;
+}
+
+/*
  Fits a linear model to the data using as few nonzero coefficients as possible.
  Basically, start with just the intercept, then keep adding additional
  predictors (nonzero coefficients) to the model that lowers Mallows' Cp
  statistic, one at a time. Stop when Cp can't be lowered further with more
  predictors.
 
- This is a naive version of R's step function.
-*/
-bool fstep(const_mat_view X, const_mat_view Y, double var, mat &coefs) {
-	assert(Y.cols() == 1);
-	int ncols = X.cols(), p = 0;
-	vector<int> predictors;
-	vector<bool> used(ncols, false);
-	mat Xcurr(X.rows(), ncols);
-	cvec curr_c;
-	double curr_Cp = MallowCp(Xcurr.leftCols(p), Y, cvec(), 0, var);
+ Uses the sweep operator for efficient multiple regression. See
 
-	while (p < ncols) {
+   Kenneth Lange, "Numerical Analysis for Statisticians 2nd Ed", Chapter 7
+
+ for details.
+*/
+
+bool fstep(const_mat_view X, const_mat_view Y, double var, mat &coefs_out) {
+	assert(Y.cols() == 1);
+
+	int n = X.rows(), m = X.cols(), p = 0;
+	vector<bool> used(m, false);
+	cvec y = Y.col(0);
+	cvec coefs;
+	rvec work(m);
+	mat A, Anext;
+	double curr_Cp;
+
+	/*
+	 Init A to be the symmetric matrix:
+
+	 | X'X  X'y |
+	 | y'X  y'y |
+	*/
+	A.resize(m + 1, m + 1);
+	Anext.resize(m + 1, m + 1);
+	A.topLeftCorner(m, m) = X.transpose() * X;
+	A.topRightCorner(m, 1) = X.transpose() * y;
+	A(m, m) = y.dot(y);
+	complete_symmetric_mat(A);
+
+	coefs.resize(m);
+	coefs.setConstant(0.0);
+	curr_Cp = A(m,m) / var - n + 2; // Mallow's Cp statistic
+	                                // Estimates model out-of-sample performance
+									// Note A(m,m) = RSS with no regressors
+
+	while (p < m) {
+		++p;
 		double best_Cp = 0;
 		int best_pred = -1;
 		cvec best_c;
-		for (int i = 0; i < ncols; ++i) {
+		for (int i = 0; i < m; ++i) {
 			if (used[i]) { continue; }
-			Xcurr.col(p) = X.col(i);
 
-			cvec c;
-			if (!solve(Xcurr.leftCols(p + 1), Y, c)) {
-				continue;
+			sweep_last_col(A, i, Anext);
+			cvec c = Anext.topRightCorner(m, 1);
+			for (int j = 0; j < m; ++j) {
+				if (!used[j] && j != i) {
+					c(j) = 0.0;
+				}
 			}
-			double Cp = MallowCp(Xcurr.leftCols(p + 1), Y, c, 0, var);
+			double rss = Anext(m,m);
+			double Cp = rss / var - n + 2 * (p+1);
 			if (best_pred < 0 || Cp < best_Cp || 
 			    (Cp == best_Cp && c.squaredNorm() < best_c.squaredNorm()))
 			{
@@ -163,24 +227,19 @@ bool fstep(const_mat_view X, const_mat_view Y, double var, mat &coefs) {
 			}
 		}
 		if (best_Cp < curr_Cp ||
-		    (best_Cp == curr_Cp && best_c.squaredNorm() < curr_c.squaredNorm()))
+		    (best_Cp == curr_Cp && best_c.squaredNorm() < coefs.squaredNorm()))
 		{
-			predictors.push_back(best_pred);
 			used[best_pred] = true;
-			Xcurr.col(p) = X.col(best_pred);
 			curr_Cp = best_Cp;
-			curr_c = best_c;
-			++p;
+			coefs = best_c;
+			sweep(A, best_pred, work, Anext);
+			A = Anext;
 		} else {
 			break;
 		}
 	}
-
-	coefs.resize(ncols, 1);
-	coefs.setConstant(0.0);
-	for (int i = 0; i < predictors.size(); ++i) {
-		coefs(predictors[i], 0) = curr_c(i);
-	}
+	coefs_out.resize(m, 1);
+	coefs_out.col(0) = coefs;
 	return true;
 }
 
