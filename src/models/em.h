@@ -59,7 +59,7 @@ public:
 	
 	void add_data(int t);
 	bool run(int maxiters);
-	bool predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &mode, double &y);
+	bool predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &mode, double &y, rvec &vote_trace);
 	// Return the mode with the model that best fits (x, y)
 	int best_mode(int target, const scene_sig &sig, const rvec &x, double y, double &besterror) const;
 	
@@ -85,7 +85,7 @@ private:
 	em_mode *add_mode(bool manual);
 	bool remove_modes();
 
-	int classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &obj_map);
+	int classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &obj_map, rvec &vote_trace);
 	
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void cli_error_table(std::ostream &os) const;

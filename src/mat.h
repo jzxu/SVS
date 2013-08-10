@@ -221,7 +221,12 @@ void pick_rows(mat_view X, const std::vector<int> &rows);
 */
 double dir_separation(const ptlist &a, const ptlist &b, const vec3 &u);
 
-void serialize  (const_mat_view m, std::ostream &os);
+void serialize_mv  (const_mat_view m, std::ostream &os);
+inline void serialize(const mat &m, std::ostream &os)  { serialize_mv(m, os); }
+inline void serialize(const cvec &v, std::ostream &os) { serialize_mv(v, os); }
+inline void serialize(const rvec &v, std::ostream &os) { serialize_mv(v, os); }
+inline void serialize(const vec3 &v, std::ostream &os) { serialize_mv(v, os); }
+
 void unserialize(mat &m,           std::istream &is);
 void unserialize(vec3 &v,          std::istream &is);
 void unserialize(rvec &v,          std::istream &is);

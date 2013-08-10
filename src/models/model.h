@@ -24,6 +24,23 @@ struct model_train_inst {
 	model_train_inst() : target(-1), sig(NULL) {}
 };
 
+class prediction_info : public serializable {
+public:
+	void serialize(std::ostream &os) const;
+	void unserialize(std::istream &is);
+
+	int target;
+	scene_sig sig;
+	rvec x;
+	double real_y;
+	double pred_y;
+	double error;
+	bool tested;
+	bool success;
+	relation_table rel_state;
+	std::map<std::string, rvec> model_specifics;
+};
+
 class model_train_data : public serializable, public cliproxy {
 public:
 	model_train_data();
@@ -79,18 +96,6 @@ public:
 private:
 	virtual bool predict_sub(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, bool test, rvec &y, std::map<std::string, rvec> &pinfo) = 0;
 	
-	struct prediction_info {
-		int target;
-		scene_sig sig;
-		rvec x;
-		double real_y;
-		double pred_y;
-		double error;
-		bool tested;
-		bool success;
-		relation_table rel_state;
-		std::map<std::string, rvec> model_specifics;
-	};
 	
 	std::string name, type;
 	model_train_data train_data;

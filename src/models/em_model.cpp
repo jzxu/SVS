@@ -134,19 +134,19 @@ public:
 	bool predict_sub(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, bool test, rvec &y, map<string, rvec> &info)  {
 		int mode;
 		double real_y;
-		rvec mode_info(3);
-		
+		rvec mode_info(3), vote_trace;
+		bool success;
+
 		real_y = y(0);
-		if (!em.predict(target, sig, rels, x, mode, y(0))) {
-			return false;
-		}
+		success = em.predict(target, sig, rels, x, mode, y(0), vote_trace);
 		mode_info(0) = mode;
 		if (test) {
 			mode_info(1) = em.best_mode(target, sig, x, real_y, mode_info(2));
 		}
 		info["mode"] = mode_info;
+		info["votes"] = vote_trace;
 		draw_predictions(draw, mode, em.num_modes(), y(0), real_y, get_name(), &em);
-		return true;
+		return success;
 	}
 	
 	int get_input_size() const {

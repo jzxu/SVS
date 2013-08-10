@@ -186,7 +186,7 @@ void binary_classifier::inspect_detailed(ostream &os) const {
 /*
  Return 0 to vote for i, 1 to vote for j
 */
-int binary_classifier::vote(int target, const scene_sig &sig, const relation_table &rels, const rvec &x) const {
+int binary_classifier::vote(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &clause_num, bool &used_nc) const {
 	function_timer t(timers.get_or_add("vote"));
 	
 	if (clauses.empty() && !neg_nc) {
@@ -214,23 +214,30 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 					int result = nc->classify(x);
 					loggers->get(LOG_EM) << "NC votes for " << result << endl;
 					if (result == 0) {
+						clause_num = i;
+						used_nc = true;
 						return result;
 					}
 				} else {
 					loggers->get(LOG_EM) << "No NC, voting for 0" << endl;
+					clause_num = i;
+					used_nc = false;
 					return 0;
 				}
 			}
 		}
 	}
 	// no matched clause, FOIL thinks this is a negative
+	clause_num = -1;
 	if (neg_nc) {
 		int result = 1 - neg_nc->classify(x);
 		loggers->get(LOG_EM) << "No matched clauses, NC votes for " << result << endl;
+		used_nc = true;
 		return result;
 	}
 	// no false negatives in training, so this must be a negative
 	loggers->get(LOG_EM) << "No matched clauses, no NC, vote for 1" << endl;
+	used_nc = false;
 	return 1;
 }
 
@@ -480,7 +487,7 @@ void classifier::update() {
 	}
 }
 
-void classifier::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &votes) {
+void classifier::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &votes, rvec &vote_trace) {
 	update();
 	votes.clear();
 	votes.resize(classes.size(), 0);
@@ -494,11 +501,26 @@ void classifier::classify(int target, const scene_sig &sig, const relation_table
 		r = &rels;
 	}
 	
+	/*
+	 vote_trace is "formatted" in blocks of 5 values. Each block corresponds to
+	 the voting record for one pair of modes. The elements of each block are:
+
+	   1. class 0 - integer [0 .. max mode]
+	   2. class 1 - integer [0 .. max mode]
+	   3. vote (0 for class 0, 1 for class 1)
+	   4. index of the clause matched
+	   5. whether a numeric classifier was used (1 = yes)
+	*/
+	vote_trace.resize(pairs.size() * 5);
+
 	std::list<pair_info*>::const_iterator i, iend;
-	for (i = pairs.begin(), iend = pairs.end(); i != iend; ++i) {
+	int j;
+	for (i = pairs.begin(), iend = pairs.end(), j = 0; i != iend; ++i, j += 5) {
 		const pair_info &p = **i;
+		int clause_index;
+		bool used_nc;
 		loggers->get(LOG_EM) << "VOTE " << p.cls_i << " " << p.cls_j << endl;
-		int winner = p.clsfr->vote(target, sig, *r, x);
+		int winner = p.clsfr->vote(target, sig, *r, x, clause_index, used_nc);
 		if (winner == 0) {
 			++votes[p.cls_i];
 		} else if (winner == 1) {
@@ -506,6 +528,11 @@ void classifier::classify(int target, const scene_sig &sig, const relation_table
 		} else {
 			FATAL("illegal winner");
 		}
+		vote_trace(j + 0) = p.cls_i;
+		vote_trace(j + 1) = p.cls_j;
+		vote_trace(j + 2) = winner;
+		vote_trace(j + 3) = clause_index;
+		vote_trace(j + 4) = used_nc;
 	}
 	
 	if (context) {

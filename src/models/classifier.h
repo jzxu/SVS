@@ -34,7 +34,7 @@ public:
 	binary_classifier(logger_set *loggers);
 	~binary_classifier();
 
-	int vote(int target, const scene_sig &sig, const relation_table &rels, const rvec &x) const;
+	int vote(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &clause_num, bool &used_nc) const;
 	void update(const relation &pos, const relation &neg, const relation_table &rels, const model_train_data &train_data, bool use_foil, bool prune, const std::string &nc_type);
 	
 	void inspect(std::ostream &os) const;
@@ -67,7 +67,7 @@ public:
 	void del_classes(const std::vector<int> &c);
 	
 	void update_class(int i, int old_class, int new_class);
-	void classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &votes);
+	void classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &votes, rvec &trace);
 
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);

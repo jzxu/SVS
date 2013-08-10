@@ -576,7 +576,7 @@ bool EM::unify_or_add_mode() {
 }
 
 
-bool EM::predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &mode, double &y) {
+bool EM::predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &mode, double &y, rvec &vote_trace) {
 	if (insts.empty()) {
 		mode = 0;
 		return false;
@@ -584,7 +584,7 @@ bool EM::predict(int target, const scene_sig &sig, const relation_table &rels, c
 	
 	vector<int> obj_map;
 	if (use_em) {
-		mode = classify(target, sig, rels, x, obj_map);
+		mode = classify(target, sig, rels, x, obj_map, vote_trace);
 		if (mode > 0) {
 			modes[mode]->predict(sig, x, obj_map, y);
 			return true;
@@ -830,9 +830,9 @@ void inst_info::mode_info::unserialize(istream &is) {
 	unserializer(is) >> error >> error_stale >> sig_map;
 }
 
-int EM::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &obj_map) {
+int EM::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &obj_map, rvec &vote_trace) {
 	vector<int> votes, order;
-	clsfr.classify(target, sig, rels, x, votes);
+	clsfr.classify(target, sig, rels, x, votes, vote_trace);
 	
 	loggers->get(LOG_EM) << "votes:" << endl;
 	for (int i = 0, iend = votes.size(); i < iend; ++i) {

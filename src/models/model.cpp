@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <limits>
+#include "mat.h"
 #include "serialize.h"
 #include "model.h"
 #include "svs.h"
@@ -191,9 +192,13 @@ void model::cli_predictions(const vector<string> &args, ostream &os) {
 			for (int i = 0, iend = predictions.size(); i < iend; ++i) {
 				rvec *p = map_getp(predictions[i]->model_specifics, args[0]);
 				if (p) {
-					os << *p << endl;
+					os << i;
+					for (int j = 0, jend = p->size(); j < jend; ++j) {
+						os << " " << (*p)(j);
+					}
+					os << endl;
 				} else {
-					os << "NA" << endl;
+					os << i << " NA" << endl;
 				}
 			}
 		}
@@ -227,11 +232,12 @@ void model::serialize(ostream &os) const {
 	serializer sr(os);
 	sr << name << type << '\n';
 	sr << train_data << '\n';
+	sr << predictions << '\n';
 	serialize_sub(os);
 }
 
 void model::unserialize(istream &is) {
-	unserializer(is) >> name >> type >> train_data;
+	unserializer(is) >> name >> type >> train_data >> predictions;
 	unserialize_sub(is);
 }
 
@@ -635,3 +641,16 @@ void model_train_data::cli_save(const vector<string> &args, ostream &os) const {
 	serialize(f);
 	f.close();
 }
+
+void prediction_info::serialize(ostream &os) const {
+	serializer(os) << target << sig << x << real_y << pred_y
+	               << error << tested << success << rel_state
+				   << model_specifics;
+}
+
+void prediction_info::unserialize(istream &is) {
+	unserializer(is) >> target >> sig >> x >> real_y >> pred_y
+	                 >> error >> tested >> success >> rel_state
+				     >> model_specifics;
+}
+
