@@ -356,14 +356,6 @@ int test_clause_n(const clause &c, bool pos, const relation &tests, const relati
 	return ncorrect;
 }
 
-void clause_success_rate(const clause &c, const relation &pos, const relation &neg, const relation_table &rels, double &success_rate, double &fp_rate, double &fn_rate) {
-	int pos_correct, neg_correct;
-	pos_correct = test_clause_n(c, true, pos, rels, NULL);
-	fn_rate = (pos.size() - pos_correct) / static_cast<double>(pos.size());
-	neg_correct = test_clause_n(c, false, neg, rels, NULL);
-	fp_rate = (neg.size() - neg_correct) / static_cast<double>(neg.size());
-	success_rate = (pos_correct + neg_correct) / static_cast<double>(pos.size() + neg.size());
-}
 
 /*
  A variable is unbound if it only appears in negated literals. These should be
@@ -434,67 +426,35 @@ void fix_variables(int num_auto_bound, clause &c) {
  So currently it looks like the false positive rate is the way to go.
 */
  
-void prune_clause_accuracy(clause &c, const relation &pos, const relation &neg, const relation_table &rels, logger_set *loggers, double &success_rate, double &fp_rate, double &fn_rate) {
-	double s, fp, fn;
-	int best_lit;
-	
-	if (pos.empty() && neg.empty()) {
-		success_rate = 1.0;
-		fp_rate = 0.0;
-		fn_rate = 0.0;
-		return;
+double prune_clause(clause &c, const relation &neg, const relation_table &rels, logger_set *loggers) {
+	if (neg.empty()) {
+		return 0.0;
 	}
 	
-	clause_success_rate(c, pos, neg, rels, success_rate, fp_rate, fn_rate);
-	loggers->get(LOG_FOIL) << "original: " << c << " " << success_rate << endl;
-	while (true) {
-		best_lit = -1;
-		for (int i = 0; i < c.size(); ++i) {
-			clause pruned = c;
-			pruned.erase(pruned.begin() + i);
-			fix_variables(pos.arity(), pruned);
-			clause_success_rate(pruned, pos, neg, rels, s, fp, fn);
-			if (s > success_rate) {
-				best_lit = i;
-				success_rate = s;
-				fp_rate = fp;
-				fn_rate = fn;
-			}
-		}
-		if (best_lit < 0) {
-			break;
-		}
-		c.erase(c.begin() + best_lit);
-		fix_variables(pos.arity(), c);
-	}
-	loggers->get(LOG_FOIL) << "pruned:   " << c << " " << success_rate << endl;
-}
+	loggers->get(LOG_FOIL) << "pruning clause " << c;
 
-void prune_clause_fp(clause &c, const relation &pos, const relation &neg, const relation_table &rels, logger_set *loggers, double &success_rate, double &fp_rate, double &fn_rate) {
-	double s, fp, fn;
-	
-	if (pos.empty() && neg.empty()) {
-		success_rate = 1.0;
-		fp_rate = 0.0;
-		fn_rate = 0.0;
-		return;
-	}
-	
-	clause_success_rate(c, pos, neg, rels, success_rate, fp_rate, fn_rate);
-	loggers->get(LOG_FOIL) << "original: " << c << " " << success_rate << endl;
+	int fp = test_clause_n(c, true, neg, rels, NULL);
 	for (int i = c.size() - 1; i >= 0; --i) {
 		clause pruned = c;
 		pruned.erase(pruned.begin() + i);
-		fix_variables(pos.arity(), pruned);
-		clause_success_rate(pruned, pos, neg, rels, s, fp, fn);
-		loggers->get(LOG_FOIL) << "removing " << c[i] << " results in " << fp_rate << " -> " << fp
-		                      << " " << fn_rate << " -> " << fn << endl;
-		if (fp <= fp_rate) {
+		fix_variables(neg.arity(), pruned);
+		int pruned_fp = test_clause_n(pruned, true, neg, rels, NULL);
+		if (pruned_fp <= fp) {
 			c.erase(c.begin() + i);
+			fp = pruned_fp;
+			loggers->get(LOG_FOIL) << "removing " << c[i] << endl;
 		}
 	}
-	fix_variables(pos.arity(), c);
-	loggers->get(LOG_FOIL) << "pruned:   " << c << " " << success_rate << endl;
+	fix_variables(neg.arity(), c);
+	loggers->get(LOG_FOIL) << "pruned: " << c << endl;
+	return fp / static_cast<double>(neg.size());
+}
+
+double clause_fp_rate(const clause &c, const relation &neg, const relation_table &rels) {
+	if (neg.empty()) {
+		return 0.0;
+	}
+	return test_clause_n(c, true, neg, rels, NULL) / static_cast<double>(neg.size());
 }
 
 void split_training(double ratio, const relation &all, relation &grow, relation &test) {
@@ -594,7 +554,7 @@ void FOIL::set_problem(const relation &p, const relation &n, const relation_tabl
 */
 bool FOIL::learn(bool prune, bool record_errors) {
 	relation pos_test, neg_test, pos_left;
-	double success_rate, fp_rate, fn_rate;
+	double fp_rate;
 	bool dead;
 	
 	if (neg.empty()) {
@@ -621,9 +581,9 @@ bool FOIL::learn(bool prune, bool record_errors) {
 		
 		clause old = ci.cl;
 		if (prune) {
-			prune_clause_fp(ci.cl, pos_test, neg_test, *rels, loggers, success_rate, fp_rate, fn_rate);
+			fp_rate = prune_clause(ci.cl, neg_test, *rels, loggers);
 		} else {
-			clause_success_rate(ci.cl, pos_test, neg_test, *rels, success_rate, fp_rate, fn_rate);
+			fp_rate = clause_fp_rate(ci.cl, neg_test, *rels);
 		}
 		
 		if (!ci.cl.empty() && fp_rate < MAX_CLAUSE_FP_RATE) {
