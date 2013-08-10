@@ -78,7 +78,7 @@ public:
 			filter_val *fv = out->get_removed(i);
 			record r;
 			if (!map_pop(records, fv, r)) {
-				assert(false);
+				FATAL("filter value not found");
 			}
 			si->remove_wme(r.rec_wme);
 		}
@@ -216,7 +216,7 @@ private:
 				return;
 			}
 		}
-		assert(false);
+		FATAL("element not found");
 	}
 	
 	Symbol         *root;

@@ -311,7 +311,7 @@ bool linreg_clean(regression_type t, const_mat_view X, const_mat_view Y, double 
 		case FORWARD:
 			return fstep(X, Y, var, coefs);
 		default:
-			assert(false);
+			FATAL("unknown regression type");
 	}
 	return false;
 }

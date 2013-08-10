@@ -235,7 +235,7 @@ void em_mode::learn_obj_clauses(const relation_table &rels) const {
 		foil.set_problem(pos_obj, neg_obj, rels);
 		if (!foil.learn(true, false)) {
 			// respond to this situation appropriately
-			assert(false);
+			FATAL("FOIL failed");
 		}
 		obj_clauses[i].resize(foil.num_clauses());
 		for (int j = 0, jend = foil.num_clauses(); j < jend; ++j) {

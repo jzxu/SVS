@@ -197,7 +197,7 @@ int interval_set::ith(int i) const {
 			i -= s;
 		}
 	}
-	assert(false);
+	FATAL("index out of range");
 	return -1;
 }
 

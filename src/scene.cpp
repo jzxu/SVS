@@ -88,7 +88,7 @@ bool parse_transforms(vector<string> &f, int &start, vec3 &pos, vec3 &rot, vec3 
 			scale = t;
 			break;
 		default:
-			assert(false);
+			FATAL("Illegal transform type");
 	}
 	return true;
 }

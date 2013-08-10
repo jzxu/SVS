@@ -12,9 +12,10 @@ using namespace std;
 const double NAN = std::numeric_limits<double>::quiet_NaN();
 const double INF = std::numeric_limits<double>::infinity();
 
-void fatal(const string &msg, int exit_code) {
+void fatal(const char *msg, const char *file, int line) {
+	cerr << "Fatal error at " << file << ":" << line << endl;
 	cerr << msg << endl;
-	exit(exit_code);
+	exit(1);
 }
 
 void split(const string &s, const string &delim, vector<string> &fields) {

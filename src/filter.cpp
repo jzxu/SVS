@@ -66,7 +66,7 @@ void concat_filter_input::combine(const input_table &inputs) {
 		}
 		for (int j = 0, jend = o->num_removed(); j < jend; ++j) {
 			if (!map_pop(val2params, o->get_removed(j), p)) {
-				assert(false);
+				FATAL("Value not found");
 			}
 			remove(p);
 		}

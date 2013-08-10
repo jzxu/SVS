@@ -548,7 +548,7 @@ numeric_classifier *make_numeric_classifier(const string &type) {
 	} else if (type == "none") {
 		return NULL;
 	}
-	assert(false);
+	FATAL("unknown numeric classifier type");
 	return NULL;
 }
 

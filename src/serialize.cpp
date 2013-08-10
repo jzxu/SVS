@@ -16,13 +16,13 @@ void unserialize(serializable &v, istream &is) {
 
 void serialize(char c, ostream &os) {
 	if (!os.put(c)) {
-		assert(false);
+		FATAL("serialize error");
 	}
 }
 
 void unserialize(char &c, istream &is) {
 	if (!(is >> c)) {
-		assert(false);
+		FATAL("unserialize error");
 	}
 }
 
@@ -33,7 +33,7 @@ void serialize(bool b, ostream &os) {
 void unserialize(bool &b, istream &is) {
 	char c;
 	if (!(is >> c)) {
-		assert(false);
+		FATAL("serialize error");
 	}
 	assert(c == 't' || c == 'f');
 	b = (c == 't');
@@ -54,10 +54,10 @@ void serialize(size_t v, ostream &os) {
 void unserialize(int &v, istream &is) {
 	string buf;
 	if (!(is >> buf)) {
-		assert(false);
+		FATAL("unserialize error");
 	}
 	if (!parse_int(buf, v)) {
-		assert(false);
+		FATAL("expecting integer in unserialize");
 	}
 }
 
@@ -71,8 +71,7 @@ void serialize(double v, ostream &os) {
 	static char buf[100];
 	
 	if (sprintf(buf, "%a", v) == 40) {
-		cerr << "buffer overflow when serializing a double" << endl;
-		assert(false);
+		FATAL("buffer overflow when serializing a double");
 	}
 	os << buf;
 }
@@ -85,7 +84,7 @@ void unserialize(double &v, istream &is) {
 	string buf;
 	
 	if (!(is >> buf) || !parse_double(buf, v)) {
-		assert(false);
+		FATAL("unserialize double error");
 	}
 }
 

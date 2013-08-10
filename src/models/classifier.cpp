@@ -384,7 +384,7 @@ void classifier::del_classes(const vector<int> &c) {
 			if (!classes[i]->mem_rel.empty()) {
 				cout << "ERROR: deleting non-empty class" << endl;
 				cout << classes[i]->mem_rel << endl;
-				assert(false);
+				FATAL("");
 			}
 			delete classes[i];
 			class_map[i] = -1;
@@ -504,7 +504,7 @@ void classifier::classify(int target, const scene_sig &sig, const relation_table
 		} else if (winner == 1) {
 			++votes[p.cls_j];
 		} else {
-			assert(false);
+			FATAL("illegal winner");
 		}
 	}
 	

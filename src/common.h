@@ -23,7 +23,9 @@ typedef std::vector<int> int_tuple;
 extern const double NAN;
 extern const double INF;
 
-void fatal(const std::string &msg, int exit_code = 1);
+#define FATAL(m) fatal((m), __FILE__, __LINE__)
+
+void fatal(const char *msg, const char *file, int line);
 void split(const std::string &s, const std::string &delim, std::vector<std::string> &fields);
 void strip(std::string &s, const std::string &whitespace);
 
@@ -66,7 +68,7 @@ template <typename A, typename B>
 inline B &map_get(std::map<A, B> &m, const A &key) {
 	typename std::map<A, B>::iterator i = m.find(key);
 	if (i == m.end()) {
-		assert(false);
+		FATAL("key not found");
 	}
 	return i->second;
 }
@@ -75,7 +77,7 @@ template <typename A, typename B>
 inline const B &map_get(const std::map<A, B> &m, const A &key) {
 	typename std::map<A, B>::const_iterator i = m.find(key);
 	if (i == m.end()) {
-		assert(false);
+		FATAL("key not found");
 	}
 	return i->second;
 }

@@ -137,7 +137,7 @@ string rhs_count(smlRhsEventId id, void *data, Agent *agnt, char const *func, ch
 	
 	split(arg, fields);
 	if (!parse_int(fields[0], count)) {
-		assert(false);
+		FATAL("integer expected");
 	}
 	
 	if (fields[1] == "executed") {

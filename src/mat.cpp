@@ -118,7 +118,7 @@ void dyn_mat::remove_col(int i) {
 
 void dyn_mat::serialize(ostream &os) const {
 	assert(!released);
-	::serialize(const_mat_view(buf.topLeftCorner(r, c)), os);
+	::serialize_mv(const_mat_view(buf.topLeftCorner(r, c)), os);
 }
 
 void dyn_mat::unserialize(istream &is) {
@@ -297,7 +297,7 @@ ostream& operator<<(ostream &os, const bbox &b) {
 	return os;
 }
 
-void serialize(const_mat_view m, ostream &os) {
+void serialize_mv(const_mat_view m, ostream &os) {
 	serializer sr(os);
 	sr << string("MAT") << static_cast<int>(m.rows()) << static_cast<int>(m.cols()) << '\n';
 	for (int i = 0; i < m.rows(); ++i) {
@@ -360,7 +360,7 @@ transform3::transform3(char type, const vec3 &v) {
 			trans = Eigen::Scaling(v);
 			break;
 		default:
-			assert(false);
+			FATAL("Illegal transform type");
 	}
 }
 	

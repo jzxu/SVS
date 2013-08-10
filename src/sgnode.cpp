@@ -56,7 +56,7 @@ void sgnode::set_trans(char type, const vec3 &t) {
 			}
 			break;
 		default:
-			assert(false);
+			FATAL("illegal transform");
 	}
 }
 
@@ -78,7 +78,7 @@ vec3 sgnode::get_trans(char type) const {
 		case 's':
 			return scale;
 	}
-	fatal("illegal transform type");
+	FATAL("illegal transform type");
 	return vec3();
 }
 
@@ -686,7 +686,7 @@ sgnode *unserialize_sgnode(istream &is) {
 			n = new ball_node();
 			break;
 		default:
-			fatal("illegal node type encountered in unserialization");
+			FATAL("illegal node type encountered in unserialization");
 			break;
 	}
 	

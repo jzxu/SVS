@@ -17,7 +17,7 @@
 #include <list>
 #include <set>
 #include <map>
-#include <cassert>
+#include "common.h"
 #include "serializable.h"
 
 void serialize(const serializable &v, std::ostream &os);
@@ -60,13 +60,13 @@ template <typename U, typename V>
 void unserialize(std::pair<U, V> &p, std::istream &is) {
 	char delim;
 	is >> delim;
-	assert(delim == '(');
+	if (delim != '(') FATAL("unserialization error");
 	unserialize(p.first, is);
 	is >> delim;
-	assert(delim == ',');
+	if (delim != ',') FATAL("unserialization error");
 	unserialize(p.second, is);
 	is >> delim;
-	assert(delim == ')');
+	if (delim != ')') FATAL("unserialization error");
 }
 
 template <typename T>
@@ -86,7 +86,7 @@ void unserialize(T *&v, std::istream &is) {
 	if (c == '0') {
 		v = NULL;
 	} else {
-		assert(c == '1');
+		if (c != '1') FATAL("unserialization error");
 		T *t = new T;
 		unserialize(*t, is);
 		v = t;
@@ -120,17 +120,17 @@ void unserialize(std::vector<T> &v, std::istream &is) {
 	char delim;
 	int n = 0;
 	if (!(is >> n >> delim) || delim != '[') {
-		assert(false);
+		FATAL("unserialization error");
 	}
 	v.resize(n);
 	for (int i = 0; i < n; ++i) {
 		unserialize(v[i], is);
 		if (!(is >> delim) || delim != ',') {
-			assert(false);
+			FATAL("unserialization error");
 		}
 	}
 	if (!(is >> delim) || delim != ']') {
-		assert(false);
+		FATAL("unserialization error");
 	}
 }
 
@@ -144,7 +144,7 @@ void unserialize(std::set<T> &s, std::istream &is) {
 	char delim;
 	int n = 0;
 	if (!(is >> n >> delim) || delim != '[') {
-		assert(false);
+		FATAL("unserialization error");
 	}
 	s.clear();
 	T elem;
@@ -152,11 +152,11 @@ void unserialize(std::set<T> &s, std::istream &is) {
 		unserialize(elem, is);
 		s.insert(elem);
 		if (!(is >> delim) || delim != ',') {
-			assert(false);
+			FATAL("unserialization error");
 		}
 	}
 	if (!(is >> delim) || delim != ']') {
-		assert(false);
+		FATAL("unserialization error");
 	}
 	/*
 	 If elem contains a pointer and doesn't have a custom assignment operator,
@@ -179,7 +179,7 @@ void unserialize(std::list<T> &l, std::istream &is) {
 	char delim;
 	int n = 0;
 	if (!(is >> n >> delim) || delim != '[') {
-		assert(false);
+		FATAL("unserialization error");
 	}
 	l.clear();
 	T elem;
@@ -187,11 +187,11 @@ void unserialize(std::list<T> &l, std::istream &is) {
 		unserialize(elem, is);
 		l.push_back(elem);
 		if (!(is >> delim) || delim != ',') {
-			assert(false);
+			FATAL("unserialization error");
 		}
 	}
 	if (!(is >> delim) || delim != ']') {
-		assert(false);
+		FATAL("unserialization error");
 	}
 	/*
 	 Reset key for the same reason as in the set unserializer.
@@ -209,7 +209,7 @@ void unserialize(std::map<K, V> &m, std::istream &is) {
 	char delim;
 	int n = 0;
 	if (!(is >> n >> delim) || delim != '[') {
-		assert(false);
+		FATAL("unserialization error");
 	}
 	m.clear();
 	typename std::pair<K,V> entry;
@@ -217,11 +217,11 @@ void unserialize(std::map<K, V> &m, std::istream &is) {
 		unserialize(entry, is);
 		m.insert(entry);
 		if (!(is >> delim) || delim != ',') {
-			assert(false);
+			FATAL("unserialization error");
 		}
 	}
 	if (!(is >> delim) || delim != ']') {
-		assert(false);
+		FATAL("unserialization error");
 	}
 	/*
 	 Reset key for the same reason as in the set unserializer.

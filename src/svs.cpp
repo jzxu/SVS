@@ -371,7 +371,7 @@ void svs_state::proxy_get_children(map<string, cliproxy*> &c) {
 	for (i = curr_cmds.begin(); i != curr_cmds.end(); ++i) {
 		string id;
 		if (!si->get_name(si->get_wme_val(i->first), id)) {
-			assert(false);
+			FATAL("identifier not found");
 		}
 		cmds->add(id, i->second);
 	}

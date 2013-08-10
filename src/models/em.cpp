@@ -194,7 +194,7 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 		Yin.bottomRows(bottom_size) = Y.bottomRows(bottom_size);
 
 		if (!linreg(FORWARD, Xin, Yin, dummy, noise_var, coefs_in, inter_in)) {
-			assert(false);
+			FATAL("linear regression failed");
 		}
 		
 		assert(coefs_in.rows() == coefs.rows());
@@ -261,7 +261,7 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 		pick_rows(Y, mss, Ymss);
 		static int dbgcount = 0;
 		if (!linreg_d(FORWARD, Xmss, Ymss, dummy, noise_var, C, inter)) {
-			assert(false);
+			FATAL("linear regression failed");
 		}
 		Yp = (X * C).rowwise() + inter;
 		error = (Y - Yp).cwiseAbs().rowwise().sum();
@@ -865,7 +865,7 @@ int EM::classify(int target, const scene_sig &sig, const relation_table &rels, c
 		return order[i];
 	}
 	
-	fatal("Reached unreachable line in EM::classify");
+	FATAL("Reached unreachable line in EM::classify");
 	return -1;
 }
 

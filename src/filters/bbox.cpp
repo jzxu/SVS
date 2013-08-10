@@ -51,7 +51,7 @@ public:
 				newres = a.contains(b);
 				break;
 			default:
-				assert(false);
+				FATAL("illegal operation");
 		}
 		changed = (newres != res);
 		res = newres;

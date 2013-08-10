@@ -564,7 +564,7 @@ int literal::operator<<(const std::string &s) {
 	args.resize(num_strs.size());
 	for (int i = 0; i < num_strs.size(); ++i) {
 		if (!parse_int(num_strs[i], args[i])) {
-			assert(false);
+			FATAL("expecting integer");
 		}
 	}
 	return c + 1;

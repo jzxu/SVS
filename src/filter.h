@@ -236,7 +236,7 @@ public:
 				return;
 			}
 		}
-		assert(false);
+		FATAL("value not found");
 	}
 	
 	void clear_changes() {

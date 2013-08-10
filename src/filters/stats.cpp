@@ -45,7 +45,7 @@ private:
 				return true;
 			}
 		}
-		assert(false);
+		FATAL("element not found");
 		return false;
 	}
 
@@ -59,7 +59,7 @@ private:
 				return true;
 			}
 		}
-		assert(false);
+		FATAL("element not found");
 		return false;
 	}
 
