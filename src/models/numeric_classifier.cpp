@@ -185,17 +185,6 @@ void LDA::learn(mat &data, const vector<int> &cls) {
 	mat S = Swi * Sb;
 	assert(!hasnan(S));
 	
-	/*
-	ofstream tmp("/tmp/swsb.ser"), tmp2("/tmp/swi.ser"), tmp3("/tmp/S.ser");
-	::serialize(Sw, tmp);
-	::serialize(Sb, tmp);
-	tmp.close();
-	::serialize(Swi, tmp2);
-	tmp2.close();
-	::serialize(S, tmp3);
-	tmp3.close();
-	*/
-	
 	EigenSolver<mat> e;
 	e.compute(S);
 	VectorXcd eigenvals = e.eigenvalues();
@@ -262,7 +251,7 @@ void LDA::inspect(ostream &os) const {
 }
 
 void LDA::serialize(ostream &os) const {
-	serializer(os) << W << projected << J << classes << used_cols << degenerate << degenerate_class;
+	serializer(os) << "lda" << W << projected << J << classes << used_cols << degenerate << degenerate_class;
 }
 
 void LDA::unserialize(istream &is) {
@@ -310,7 +299,7 @@ void sign_classifier::inspect(std::ostream &os) const {
 }
 
 void sign_classifier::serialize(ostream &os) const {
-	serializer(os) << dim << sgn << size;
+	serializer(os) << "sign" << dim << sgn << size;
 }
 
 void sign_classifier::unserialize(istream &is) {
@@ -530,11 +519,43 @@ void dtree_classifier::inspect(ostream &os) const {
 }
 
 void dtree_classifier::serialize(ostream &os) const {
-	serializer(os) << depth << split_dim << split_val << cls << left << right;
+	serializer(os) << "dtree" << depth << split_dim << split_val << cls
+	               << (left != NULL) << (right != NULL);
+	if (left) {
+		left->serialize(os);
+	}
+	if (right) {
+		right->serialize(os);
+	}
 }
 
 void dtree_classifier::unserialize(istream &is) {
-	unserializer(is) >> depth >> split_dim >> split_val >> cls >> left >> right;
+	numeric_classifier *left_nc, *right_nc;
+	bool has_left, has_right;
+	unserializer(is) >> depth >> split_dim >> split_val >> cls
+	                 >> has_left >> has_right;
+	if (left) {
+		delete left;
+		left = NULL;
+	}
+	if (right) {
+		delete right;
+		right = NULL;
+	}
+	if (has_left) {
+		left_nc = unserialize_numeric_classifier(is);
+		assert(left_nc);
+		left = dynamic_cast<dtree_classifier*>(left_nc);
+		assert(left);
+	}
+
+	if (has_right) {
+		right_nc = unserialize_numeric_classifier(is);
+		assert(right_nc);
+		right = dynamic_cast<dtree_classifier*>(right_nc);
+		assert(right);
+	}
+
 	assert((cls >= 0 && split_dim < 0 && !left && !right) || (cls < 0 && split_dim >= 0 && left && right));
 }
 
@@ -550,5 +571,17 @@ numeric_classifier *make_numeric_classifier(const string &type) {
 	}
 	FATAL("unknown numeric classifier type");
 	return NULL;
+}
+
+numeric_classifier *unserialize_numeric_classifier(istream &is) {
+	string type;
+	numeric_classifier *nc;
+
+	unserializer(is) >> type;
+	nc = make_numeric_classifier(type);
+	if (nc) {
+		nc->unserialize(is);
+	}
+	return nc;
 }
 

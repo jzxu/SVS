@@ -83,11 +83,11 @@ numeric_classifier *learn_numeric_classifier(const string &type, const relation 
 }
 
 binary_classifier::binary_classifier()
-: const_vote(0), neg_nc_type("none"), neg_nc(NULL), loggers(NULL)
+: const_vote(0), neg_nc(NULL), loggers(NULL)
 {}
 
 binary_classifier::binary_classifier(logger_set *loggers)
-: const_vote(0), neg_nc_type("none"), neg_nc(NULL), loggers(loggers)
+: const_vote(0), neg_nc(NULL), loggers(loggers)
 {}
 
 binary_classifier::~binary_classifier() {
@@ -99,28 +99,22 @@ binary_classifier::~binary_classifier() {
 void binary_classifier::serialize(ostream &os) const {
 	serializer(os) << const_vote << clauses 
 	               << false_negatives << true_negatives
-				   << neg_nc_type;
-	if (neg_nc_type == "none") {
-		assert(!neg_nc);
-	} else {
-		assert(neg_nc);
+	               << (neg_nc != NULL);
+	if (neg_nc) {
 		neg_nc->serialize(os);
 	}
 }
 
 void binary_classifier::unserialize(istream &is) {
+	bool has_negnc;
 	unserializer(is) >> const_vote >> clauses 
 	                 >> false_negatives >> true_negatives
-	                 >> neg_nc_type;
-	if (neg_nc_type == "none") {
-		if (neg_nc) {
-			delete neg_nc;
-			neg_nc = NULL;
-		}
-	} else {
-		neg_nc = make_numeric_classifier(neg_nc_type);
-		neg_nc->unserialize(is);
+	                 >> has_negnc;
+
+	if (neg_nc) {
+		delete neg_nc;
 	}
+	neg_nc = has_negnc ? unserialize_numeric_classifier(is) : NULL;
 }
 
 void binary_classifier::inspect(ostream &os) const {
@@ -248,7 +242,6 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 	if (neg_nc) {
 		delete neg_nc;
 		neg_nc = NULL;
-		neg_nc_type = "none";
 	}
 	
 	const_vote = mem_i.size() > mem_j.size() ? 0 : 1;
@@ -290,48 +283,34 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 			if (clauses[k].nc) {
 				delete clauses[k].nc;
 				clauses[k].nc = NULL;
-				clauses[k].nc_type = "none";
 			}
 			double fp = clauses[k].false_pos.size(), tp = clauses[k].true_pos.size();
 			if (fp / (fp + tp) > .5) {
 				clauses[k].nc = learn_numeric_classifier(nc_type, clauses[k].true_pos, clauses[k].false_pos, data);
-				if (clauses[k].nc) {
-					clauses[k].nc_type = nc_type;
-				}
 			}
 		}
 		
 		double fn = false_negatives.size(), tn = true_negatives.size();
 		if (fn / (fn + tn) > .5) {
 			neg_nc = learn_numeric_classifier(nc_type, true_negatives, false_negatives, data);
-			if (neg_nc) {
-				neg_nc_type = nc_type;
-			}
 		}
 	}
 }
 
 void clause_info::serialize(ostream &os) const {
-	serializer(os) << cl << false_pos << true_pos << nc_type;
-	if (nc_type == "none") {
-		assert(!nc);
-	} else {
-		assert(nc);
+	serializer(os) << cl << false_pos << true_pos << (nc != NULL);
+	if (nc) {
 		nc->serialize(os);
 	}
 }
 
 void clause_info::unserialize(istream &is) {
-	unserializer(is) >> cl >> false_pos >> true_pos >> nc_type;
-	if (nc_type == "none") {
-		if (nc) {
-			delete nc;
-			nc = NULL;
-		}
-	} else {
-		nc = make_numeric_classifier(nc_type);
-		nc->unserialize(is);
+	bool has_nc;
+	unserializer(is) >> cl >> false_pos >> true_pos >> has_nc;
+	if (nc) {
+		delete nc;
 	}
+	nc = has_nc ? unserialize_numeric_classifier(is) : NULL;
 }
 
 classifier::classifier(const model_train_data &data, logger_set *loggers) 

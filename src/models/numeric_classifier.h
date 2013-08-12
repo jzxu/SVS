@@ -16,6 +16,7 @@ public:
 };
 
 numeric_classifier *make_numeric_classifier(const std::string &type);
+numeric_classifier *unserialize_numeric_classifier(std::istream &is);
 
 #endif
 

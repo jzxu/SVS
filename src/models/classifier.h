@@ -15,13 +15,12 @@ class logger_set;
 
 class clause_info : public serializable {
 public:
-	clause_info() : nc_type("none"), nc(NULL) {}
+	clause_info() : nc(NULL) {}
 	~clause_info() { if (nc) { delete nc; } }
 	
 	clause cl;
 	relation false_pos;
 	relation true_pos;
-	std::string nc_type;
 	numeric_classifier *nc;
 	
 	void serialize(std::ostream &os) const;
@@ -48,7 +47,6 @@ private:
 	std::vector<clause_info> clauses;
 	
 	relation false_negatives, true_negatives;
-	std::string neg_nc_type;
 	numeric_classifier *neg_nc;
 
 	mutable timer_set timers;
