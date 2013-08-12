@@ -561,31 +561,38 @@ void model_train_data::cli_relations(const vector<string> &args, ostream &os) co
 		print_relation_table_condensed(*rels, os);
 		return;
 	}
-	const relation *r = map_getp(*rels, args[i]);
-	if (!r) {
-		os << "no such relation" << endl;
-		return;
-	}
-	if (i + 1 >= args.size()) {
-		os << *r << endl;
-		return;
+
+	relation_table matched;
+	if (args[i] == "*") {
+		matched = *rels;
+	} else {
+		const relation *r = map_getp(*rels, args[i]);
+		if (!r) {
+			os << "no such relation" << endl;
+			return;
+		}
+		matched[args[i]] = *r;
 	}
 
-	relation matches(*r);
-
+	++i;
 	int_tuple t(1);
-	int j, k;
-	for (j = i + 1, k = 0; j < args.size() && k < matches.arity(); ++j, ++k) {
-		if (args[j] != "*") {
-			if (!parse_int(args[j], t[0])) {
-				os << "invalid pattern" << endl;
-				return;
+	for (int j = 0; i < args.size(); ++i, ++j) {
+		if (args[i] == "*") {
+			continue;
+		}
+		if (!parse_int(args[i], t[0])) {
+			os << "invalid pattern" << endl;
+			return;
+		}
+		relation_table::iterator ri, riend;
+		for (ri = matched.begin(), riend = matched.end(); ri != riend; ++ri) {
+			if (j < ri->second.arity()) {
+				ri->second.filter(j, t, false);
 			}
-			matches.filter(k, t, false);
 		}
 	}
 
-	os << matches << endl;
+	print_relation_table_condensed(matched, os);
 	return;
 }
 
