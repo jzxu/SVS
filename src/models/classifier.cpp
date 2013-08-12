@@ -375,18 +375,24 @@ void classifier::cli_nc_type(const vector<string> &args, ostream &os) {
 
 void classifier::add_class() {
 	int c = classes.size();
-	for (int i = 0, iend = classes.size(); i < iend; ++i) {
+	for (int i = 1, iend = classes.size(); i < iend; ++i) {
 		binary_classifier *b = new binary_classifier(loggers);
-		pairs.push_back(new pair_info(i, c, b));
+		assert(i != 0 && c != 0);
+		pair_info *p = new pair_info;
+		p->cls_i = i;
+		p->cls_j = c;
+		p->clsfr = b;
+		pairs.push_back(p);
 	}
 	classes.push_back(new class_info);
 }
 
 void classifier::del_classes(const vector<int> &c) {
 	vector<int> class_map(classes.size());
-	
-	int n = 0;
-	for (int i = 0, iend = classes.size(); i < iend; ++i) {
+	int n;
+
+	class_map[0] = 0;
+	for (int i = 1, iend = classes.size(), n = 1; i < iend; ++i) {
 		if (has(c, i)) {
 			if (!classes[i]->mem_rel.empty()) {
 				cout << "ERROR: deleting non-empty class" << endl;
@@ -407,12 +413,13 @@ void classifier::del_classes(const vector<int> &c) {
 	std::list<pair_info*>::iterator i, iend;
 	for (i = pairs.begin(), iend = pairs.end(); i != iend; ) {
 		pair_info &p = **i;
-		if (class_map[p.cls_i] == -1 || class_map[p.cls_j] == -1) {
+		p.cls_i = class_map[p.cls_i];
+		p.cls_j = class_map[p.cls_j];
+		assert(p.cls_i != 0 && p.cls_j != 0);
+		if (p.cls_i == -1 || p.cls_j == -1) {
 			delete *i;
 			i = pairs.erase(i);
 		} else {
-			p.cls_i = class_map[p.cls_i];
-			p.cls_j = class_map[p.cls_j];
 			++i;
 		}
 	}
@@ -505,8 +512,8 @@ void classifier::classify(int target, const scene_sig &sig, const relation_table
 	 vote_trace is "formatted" in blocks of 5 values. Each block corresponds to
 	 the voting record for one pair of modes. The elements of each block are:
 
-	   1. class 0 - integer [0 .. max mode]
-	   2. class 1 - integer [0 .. max mode]
+	   1. class 0 - integer [1 .. max mode]
+	   2. class 1 - integer [1 .. max mode]
 	   3. vote (0 for class 0, 1 for class 1)
 	   4. index of the clause matched
 	   5. whether a numeric classifier was used (1 = yes)
@@ -517,6 +524,7 @@ void classifier::classify(int target, const scene_sig &sig, const relation_table
 	int j;
 	for (i = pairs.begin(), iend = pairs.end(), j = 0; i != iend; ++i, j += 5) {
 		const pair_info &p = **i;
+		assert(p.cls_i > 0 && p.cls_j > 0);
 		int clause_index;
 		bool used_nc;
 		loggers->get(LOG_EM) << "VOTE " << p.cls_i << " " << p.cls_j << endl;
@@ -545,7 +553,7 @@ void classifier::proxy_use_sub(const vector<string> &args, ostream &os) {
 	
 	if (args.empty()) {
 		// print summary of all classifiers
-		for (int i = 0, iend = classes.size(); i < iend; ++i) {
+		for (int i = 1, iend = classes.size(); i < iend; ++i) {
 			for (int j = i + 1, jend = classes.size(); j < jend; ++j) {
 				pair_info *p = find(i, j);
 				assert(p);
@@ -620,11 +628,13 @@ void classifier::unserialize(istream &is) {
 }
 
 void classifier::pair_info::serialize(ostream &os) const {
+	assert(cls_i > 0 && cls_j > 0);
 	serializer(os) << cls_i << cls_j << clsfr;
 }
 
 void classifier::pair_info::unserialize(istream &is) {
 	unserializer(is) >> cls_i >> cls_j >> clsfr;
+	assert(cls_i > 0 && cls_j > 0);
 }
 
 void classifier::class_info::serialize(ostream &os) const {

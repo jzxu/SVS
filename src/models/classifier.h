@@ -78,8 +78,6 @@ private:
 		int cls_i, cls_j;
 		binary_classifier *clsfr;
 		
-		pair_info() : cls_i(-1), cls_j(-1), clsfr(NULL) {}
-		pair_info(int i, int j, binary_classifier *c) : cls_i(i), cls_j(j), clsfr(c) {}
 		~pair_info() { delete clsfr; }
 		void serialize(std::ostream &os) const;
 		void unserialize(std::istream &is);
