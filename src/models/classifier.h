@@ -15,14 +15,15 @@ class logger_set;
 
 class clause_info : public serializable {
 public:
-	clause_info() : nc(NULL) {}
+	clause_info() : nc(NULL), success_rate(0.0) {}
 	~clause_info() { if (nc) { delete nc; } }
 	
 	clause cl;
 	relation false_pos;
 	relation true_pos;
 	numeric_classifier *nc;
-	
+	double success_rate;
+
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
 };
@@ -35,6 +36,7 @@ public:
 
 	int vote(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &clause_num, bool &used_nc) const;
 	void update(const relation &pos, const relation &neg, const relation_table &rels, const model_train_data &train_data, bool use_foil, bool prune, const std::string &nc_type);
+	double get_success_rate() const;
 	
 	void inspect(std::ostream &os) const;
 	void inspect_detailed(std::ostream &os) const;
@@ -48,6 +50,7 @@ private:
 	
 	relation false_negatives, true_negatives;
 	numeric_classifier *neg_nc;
+	double neg_success_rate;
 
 	mutable timer_set timers;
 	logger_set *loggers;
@@ -75,7 +78,10 @@ private:
 	public:
 		int cls_i, cls_j;
 		binary_classifier *clsfr;
+		bool negated;
 		
+		pair_info() : cls_i(0), cls_j(0), clsfr(NULL), negated(false) {}
+		pair_info(int i, int j) : cls_i(i), cls_j(j), clsfr(NULL), negated(false) {}
 		~pair_info() { delete clsfr; }
 		void serialize(std::ostream &os) const;
 		void unserialize(std::istream &is);

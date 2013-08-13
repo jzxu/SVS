@@ -76,6 +76,8 @@ public:
 	const relation &get_false_negatives() const { return false_negatives; }
 	const relation &get_true_negatives() const { return true_negatives; }
 	
+	double get_success_rate() const;
+
 private:
 	double choose_literal(literal &l, int nvars);
 	bool choose_clause(clause &c, relation *neg_left);

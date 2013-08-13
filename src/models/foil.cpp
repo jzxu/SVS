@@ -891,6 +891,17 @@ bool FOIL::load_foil6(istream &is) {
 	return true;
 }
 
+double FOIL::get_success_rate() const {
+	int num_right = 0, num_wrong = 0;
+	for (int i = 0, iend = clauses.size(); i < iend; ++i) {
+		num_right += clauses[i].true_positives.size();
+		num_wrong += clauses[i].false_positives.size();
+	}
+	num_right += true_negatives.size();
+	num_wrong += false_negatives.size();
+	return num_right / static_cast<double>(num_right + num_wrong);
+}
+
 literal_tree::literal_tree(const FOIL &foil, int nvars, literal_tree **best) 
 : foil(foil), best(best), expanded(false), position(-1), nbound(-1)
 {

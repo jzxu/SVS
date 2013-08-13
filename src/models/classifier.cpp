@@ -2,6 +2,7 @@
 #include "serialize.h"
 #include "common.h"
 #include "logger.h"
+#include <algorithm>
 
 using namespace std;
 
@@ -42,20 +43,35 @@ void extract_vec(const int_tuple &t, const rvec &x, const scene_sig &sig, rvec &
  single matrix? Therefore, I'm side-stepping the issue and considering only the
  target object.
 */
-numeric_classifier *learn_numeric_classifier(const string &type, const relation &pos, const relation &neg, const model_train_data &data) {
+numeric_classifier *learn_numeric_classifier(const string &type, const relation &pos, const relation &neg, const model_train_data &data, double &success_rate) {
+	const double TEST_RATIO = 0.3;
+	const int MIN_BLOCK = 30; // the minimum number of members in pos/neg, train/test
+
 	int npos = pos.size(), nneg = neg.size();
-	if (npos < 2 || nneg < 2) {
+	int ndata = npos + nneg;
+	
+	/*
+	 Split into training and test sets. Try to distribute positives and negatives
+	 as evenly as possible. Prioritize maintaining a minimum number of test
+	 examples, otherwise estimated success rates will be skewed.
+	*/
+	int npos_test = std::max(static_cast<int>(npos * TEST_RATIO), MIN_BLOCK);
+	int nneg_test = std::max(static_cast<int>(nneg * TEST_RATIO), MIN_BLOCK);
+	int npos_train = npos - npos_test;
+	int nneg_train = nneg - nneg_test;
+	int ntest = npos_test + nneg_test;
+	int ntrain = npos_train + nneg_train;
+	
+	if (npos_train < MIN_BLOCK || nneg_train < MIN_BLOCK) {
 		return NULL;
 	}
-	
+
 	// figure out matrix columns
-	int_tuple t = *pos.begin();
 	rvec xpart;
+	int_tuple t = *pos.begin();
 	extract_vec(t, data.get_inst(t[0]).x, *data.get_inst(t[0]).sig, xpart);
 	int ncols = xpart.size();
-	
-	mat train(npos + nneg, ncols);
-	vector<int> classes;
+	mat allx(ndata, ncols);
 	
 	relation::const_iterator i, iend;
 	int j = 0;
@@ -64,8 +80,7 @@ numeric_classifier *learn_numeric_classifier(const string &type, const relation 
 		const model_train_inst &inst = data.get_inst(t[0]);
 		extract_vec(t, inst.x, *inst.sig, xpart);
 		assert(xpart.size() == ncols);
-		train.row(j) = xpart;
-		classes.push_back(0);
+		allx.row(j) = xpart;
 	}
 	
 	for (i = neg.begin(), iend = neg.end(); i != iend; ++i, ++j) {
@@ -73,21 +88,70 @@ numeric_classifier *learn_numeric_classifier(const string &type, const relation 
 		const model_train_inst &inst = data.get_inst(t[0]);
 		extract_vec(t, inst.x, *inst.sig, xpart);
 		assert(xpart.size() == ncols);
-		train.row(j) = xpart;
-		classes.push_back(1);
+		allx.row(j) = xpart;
 	}
 	
+	vector<int> pos_inds(npos), neg_inds(nneg);
+	mat trainx(ntrain, ncols), testx(ntest, ncols);
+	vector<int> train_classes(ntrain), test_classes(ntest);
+
+	for (int i = 0; i < npos; ++i) {
+		pos_inds[i] = i;
+	}
+	for (int i = 0; i < nneg; ++i) {
+		neg_inds[i] = npos + i;
+	}
+	std::random_shuffle(pos_inds.begin(), pos_inds.end());
+	std::random_shuffle(neg_inds.begin(), neg_inds.end());
+
+	/*
+	 Beginning part of randomized pos_inds (neg_inds) will be used as positive
+	 (negative) training examples, rest will be used as test examples.
+	*/
+	for (int i = 0; i < npos_train; ++i) {
+		assert(i < trainx.rows() && i < train_classes.size() && i < pos_inds.size() && pos_inds[i] < allx.rows());
+		trainx.row(i) = allx.row(pos_inds[i]);
+		train_classes[i] = 0;
+	}
+	for (int i = npos_train, j = 0; i < ntrain; ++i, ++j) {
+		assert(i < trainx.rows() && i < train_classes.size() && j < neg_inds.size() && neg_inds[j] < allx.rows());
+		trainx.row(i) = allx.row(neg_inds[j]);
+		train_classes[i] = 1;
+	}
+	for (int i = 0, j = npos_train; i < npos_test; ++i, ++j) {
+		assert(i < testx.rows() && i < test_classes.size() && j < pos_inds.size() && pos_inds[j] < allx.rows());
+		testx.row(i) = allx.row(pos_inds[j]);
+		test_classes[i] = 0;
+	}
+	for (int i = npos_test, j = nneg_train; i < ntest; ++i, ++j) {
+		assert(i < testx.rows() && i < test_classes.size() && j < neg_inds.size() && neg_inds[j] < allx.rows());
+		testx.row(i) = allx.row(neg_inds[i]);
+		test_classes[i] = 1;
+	}
+
 	numeric_classifier *nc = make_numeric_classifier(type);
-	nc->learn(train, classes);
+	assert(nc);
+	nc->learn(trainx, train_classes);
+
+	int nright = 0, nwrong = 0;
+	for (int i = 0; i < ntest; ++i) {
+		if (nc->classify(testx.row(i)) == test_classes[i]) {
+			nright++;
+		} else {
+			nwrong++;
+		}
+	}
+	success_rate = nright / static_cast<double>(nright + nwrong);
+
 	return nc;
 }
 
 binary_classifier::binary_classifier()
-: const_vote(0), neg_nc(NULL), loggers(NULL)
+: const_vote(0), neg_nc(NULL), loggers(NULL), neg_success_rate(0.0)
 {}
 
 binary_classifier::binary_classifier(logger_set *loggers)
-: const_vote(0), neg_nc(NULL), loggers(loggers)
+: const_vote(0), neg_nc(NULL), loggers(loggers), neg_success_rate(0.0)
 {}
 
 binary_classifier::~binary_classifier() {
@@ -99,6 +163,7 @@ binary_classifier::~binary_classifier() {
 void binary_classifier::serialize(ostream &os) const {
 	serializer(os) << const_vote << clauses 
 	               << false_negatives << true_negatives
+				   << neg_success_rate
 	               << (neg_nc != NULL);
 	if (neg_nc) {
 		neg_nc->serialize(os);
@@ -109,6 +174,7 @@ void binary_classifier::unserialize(istream &is) {
 	bool has_negnc;
 	unserializer(is) >> const_vote >> clauses 
 	                 >> false_negatives >> true_negatives
+				     >> neg_success_rate
 	                 >> has_negnc;
 
 	if (neg_nc) {
@@ -124,13 +190,13 @@ void binary_classifier::inspect(ostream &os) const {
 	}
 	
 	table_printer t;
-	t.add_row() << "clause" << "Correct" << "Incorrect" << "NumCls?";
+	t.add_row() << "#" << "clause" << "Correct" << "Incorrect" << "NumCls?";
 	for (int i = 0, iend = clauses.size(); i < iend; ++i) {
-		t.add_row() << clauses[i].cl << clauses[i].true_pos.size() << clauses[i].false_pos.size() << (clauses[i].nc != NULL);
+		t.add_row() << i << clauses[i].cl << clauses[i].true_pos.size() << clauses[i].false_pos.size() << (clauses[i].nc != NULL);
 	}
-	t.add_row() << "NEGATIVE" << true_negatives.size() << false_negatives.size() << (neg_nc != NULL);
+	t.add_row() << '-' << "NEGATIVE" << true_negatives.size() << false_negatives.size() << (neg_nc != NULL);
 	t.print(os);
-	os << endl;
+	os << "success rate: " << get_success_rate() << endl;
 }
 
 void binary_classifier::inspect_detailed(ostream &os) const {
@@ -180,9 +246,13 @@ void binary_classifier::inspect_detailed(ostream &os) const {
 /*
  Return 0 to vote for i, 1 to vote for j
 */
-int binary_classifier::vote(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &clause_num, bool &used_nc) const {
+int binary_classifier::vote(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &matched_clause, bool &used_nc) const {
 	function_timer t(timers.get_or_add("vote"));
 	
+	int result = 1;
+	matched_clause = -1;
+	used_nc = false;
+
 	if (clauses.empty() && !neg_nc) {
 		loggers->get(LOG_EM) << "Constant vote for " << const_vote << endl;
 		return const_vote;
@@ -205,40 +275,43 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 					loggers->get(LOG_EM) << vi->first << " = " << *vi->second.begin() << endl;
 				}
 				if (nc) {
-					int result = nc->classify(x);
+					result = nc->classify(x);
 					loggers->get(LOG_EM) << "NC votes for " << result << endl;
 					if (result == 0) {
-						clause_num = i;
+						matched_clause = i;
 						used_nc = true;
-						return result;
+						break;
 					}
 				} else {
 					loggers->get(LOG_EM) << "No NC, voting for 0" << endl;
-					clause_num = i;
+					matched_clause = i;
 					used_nc = false;
-					return 0;
+					result = 0;
+					break;
 				}
 			}
 		}
 	}
-	// no matched clause, FOIL thinks this is a negative
-	clause_num = -1;
-	if (neg_nc) {
-		int result = 1 - neg_nc->classify(x);
-		loggers->get(LOG_EM) << "No matched clauses, NC votes for " << result << endl;
-		used_nc = true;
-		return result;
+	if (result == 1) {
+		// no matched clause, FOIL thinks this is a negative
+		if (neg_nc) {
+			result = 1 - neg_nc->classify(x);
+			loggers->get(LOG_EM) << "No matched clauses, NC votes for " << result << endl;
+			used_nc = true;
+		} else {
+			// no false negatives in training, so this must be a negative
+			loggers->get(LOG_EM) << "No matched clauses, no NC, vote for 1" << endl;
+			used_nc = false;
+		}
 	}
-	// no false negatives in training, so this must be a negative
-	loggers->get(LOG_EM) << "No matched clauses, no NC, vote for 1" << endl;
-	used_nc = false;
-	return 1;
+	return result;
 }
 
 void binary_classifier::update(const relation &mem_i, const relation &mem_j, const relation_table &rels, const model_train_data &data, bool use_foil, bool prune, const string &nc_type) {
 	function_timer t(timers.get_or_add("update"));
 	
 	clauses.clear();
+	neg_success_rate = 0.0;
 	if (neg_nc) {
 		delete neg_nc;
 		neg_nc = NULL;
@@ -253,14 +326,17 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 		FOIL foil(loggers);
 		foil.set_problem(mem_i, mem_j, rels);
 		foil.learn(prune, true);
+
 		clauses.resize(foil.num_clauses());
 		for (int k = 0, kend = foil.num_clauses(); k < kend; ++k) {
 			clauses[k].cl = foil.get_clause(k);
 			clauses[k].false_pos = foil.get_false_positives(k);
 			clauses[k].true_pos = foil.get_true_positives(k);
+			clauses[k].success_rate = clauses[k].true_pos.size() / static_cast<double>(clauses[k].true_pos.size() + clauses[k].false_pos.size());
 		}
 		false_negatives = foil.get_false_negatives();
 		true_negatives = foil.get_true_negatives();
+		neg_success_rate = true_negatives.size() / static_cast<double>(true_negatives.size() + false_negatives.size());
 	} else {
 		/*
 		 Don't learn any clauses. Instead consider every member of i a false negative
@@ -268,6 +344,7 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 		*/
 		false_negatives = mem_i;
 		true_negatives = mem_j;
+		neg_success_rate = true_negatives.size() / static_cast<double>(true_negatives.size() + false_negatives.size());
 	}
 	
 	/*
@@ -280,25 +357,51 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 	*/
 	if (nc_type != "none") {
 		for (int k = 0, kend = clauses.size(); k < kend; ++k) {
-			if (clauses[k].nc) {
-				delete clauses[k].nc;
-				clauses[k].nc = NULL;
-			}
-			double fp = clauses[k].false_pos.size(), tp = clauses[k].true_pos.size();
-			if (fp / (fp + tp) > .5) {
-				clauses[k].nc = learn_numeric_classifier(nc_type, clauses[k].true_pos, clauses[k].false_pos, data);
+			assert(clauses[k].nc == NULL);
+			if (clauses[k].success_rate < .5) {
+				double nc_success_rate;
+				numeric_classifier *nc = learn_numeric_classifier(nc_type, clauses[k].true_pos, clauses[k].false_pos, data, nc_success_rate);
+				if (nc_success_rate > clauses[k].success_rate) {
+					clauses[k].nc = nc;
+					clauses[k].success_rate = nc_success_rate;
+				} else {
+					delete nc;
+				}
 			}
 		}
 		
-		double fn = false_negatives.size(), tn = true_negatives.size();
-		if (fn / (fn + tn) > .5) {
-			neg_nc = learn_numeric_classifier(nc_type, true_negatives, false_negatives, data);
+		if (neg_success_rate < .5) {
+			double nc_success_rate;
+			numeric_classifier *nc = learn_numeric_classifier(nc_type, true_negatives, false_negatives, data, nc_success_rate);
+			if (nc_success_rate > neg_success_rate) {
+				neg_nc = nc;
+				neg_success_rate = nc_success_rate;
+			} else {
+				delete nc;
+			}
 		}
 	}
 }
 
+/*
+ Weighted average success rate, weighted by the number of instances covered by each clause
+*/
+double binary_classifier::get_success_rate() const {
+	int total = 0;
+	double avg_success_rate = 0;
+	for (int i = 0, iend = clauses.size(); i < iend; ++i) {
+		int n = clauses[i].false_pos.size() + clauses[i].true_pos.size();
+		total += n;
+		avg_success_rate += clauses[i].success_rate * n;
+	}
+	int nneg = true_negatives.size() + false_negatives.size();
+	total += nneg;
+	avg_success_rate += nneg * neg_success_rate;
+	return avg_success_rate / total;
+}
+
 void clause_info::serialize(ostream &os) const {
-	serializer(os) << cl << false_pos << true_pos << (nc != NULL);
+	serializer(os) << cl << false_pos << true_pos << success_rate << (nc != NULL);
 	if (nc) {
 		nc->serialize(os);
 	}
@@ -306,7 +409,7 @@ void clause_info::serialize(ostream &os) const {
 
 void clause_info::unserialize(istream &is) {
 	bool has_nc;
-	unserializer(is) >> cl >> false_pos >> true_pos >> has_nc;
+	unserializer(is) >> cl >> false_pos >> true_pos >> success_rate >> has_nc;
 	if (nc) {
 		delete nc;
 	}
@@ -355,13 +458,8 @@ void classifier::cli_nc_type(const vector<string> &args, ostream &os) {
 void classifier::add_class() {
 	int c = classes.size();
 	for (int i = 1, iend = classes.size(); i < iend; ++i) {
-		binary_classifier *b = new binary_classifier(loggers);
 		assert(i != 0 && c != 0);
-		pair_info *p = new pair_info;
-		p->cls_i = i;
-		p->cls_j = c;
-		p->clsfr = b;
-		pairs.push_back(p);
+		pairs.push_back(new pair_info(i, c));
 	}
 	classes.push_back(new class_info);
 }
@@ -456,11 +554,32 @@ void classifier::update() {
 			continue;
 		}
 		
-		binary_classifier &c = *p->clsfr;
+		if (p->clsfr) {
+			delete p->clsfr;
+		}
+		binary_classifier *pos_cls, *neg_cls;
+		const relation_table *rels;
+
 		if (context) {
-			c.update(ci->mem_rel, cj->mem_rel, data.get_context_rels(), data, foil, prune, nc_type);
+			rels = &data.get_context_rels();
 		} else {
-			c.update(ci->mem_rel, cj->mem_rel, data.get_all_rels(), data, foil, prune, nc_type);
+			rels = &data.get_all_rels();
+		}
+
+		pos_cls = new binary_classifier(loggers);
+		pos_cls->update(ci->mem_rel, cj->mem_rel, *rels, data, foil, prune, nc_type);
+		p->clsfr = pos_cls;
+		p->negated = false;
+		if (pos_cls->get_success_rate() < .99) {
+			neg_cls = new binary_classifier(loggers);
+			neg_cls->update(cj->mem_rel, ci->mem_rel, *rels, data, foil, prune, nc_type);
+			if (neg_cls->get_success_rate() > pos_cls->get_success_rate()) {
+				p->clsfr = neg_cls;
+				p->negated = true;
+				delete pos_cls;
+			} else {
+				delete neg_cls;
+			}
 		}
 	}
 	
@@ -508,6 +627,9 @@ void classifier::classify(int target, const scene_sig &sig, const relation_table
 		bool used_nc;
 		loggers->get(LOG_EM) << "VOTE " << p.cls_i << " " << p.cls_j << endl;
 		int winner = p.clsfr->vote(target, sig, *r, x, clause_index, used_nc);
+		if (p.negated) {
+			winner = 1 - winner;
+		}
 		if (winner == 0) {
 			++votes[p.cls_i];
 		} else if (winner == 1) {
@@ -535,14 +657,14 @@ void classifier::proxy_use_sub(const vector<string> &args, ostream &os) {
 		for (int i = 1, iend = classes.size(); i < iend; ++i) {
 			for (int j = i + 1, jend = classes.size(); j < jend; ++j) {
 				pair_info *p = find(i, j);
-				assert(p);
-				os << "=== FOR MODES " << i << "/" << j << " ===" << endl;
-				if (p->clsfr) {
-					p->clsfr->inspect(os);
+				assert(p && p->clsfr);
+				if (p->negated) {
+					os << "=== FOR MODES " << i << "/" << j << " (Negated) ===" << endl;
 				} else {
-					// why would this happen?
-					os << "no classifier" << endl;
+					os << "=== FOR MODES " << i << "/" << j << " ===" << endl;
 				}
+				p->clsfr->inspect(os);
+				os << endl;
 			}
 		}
 		return;
@@ -560,11 +682,10 @@ void classifier::proxy_use_sub(const vector<string> &args, ostream &os) {
 		return;
 	}
 	
-	if (p->clsfr) {
-		p->clsfr->inspect_detailed(os);
-	} else {
-		os << "null" << endl;
+	if (p->negated) {
+		os << "Negated" << endl;
 	}
+	p->clsfr->inspect_detailed(os);
 }
 
 void classifier::cli_dump_foil6(const vector<string> &args, ostream &os) const {
@@ -608,11 +729,11 @@ void classifier::unserialize(istream &is) {
 
 void classifier::pair_info::serialize(ostream &os) const {
 	assert(cls_i > 0 && cls_j > 0);
-	serializer(os) << cls_i << cls_j << clsfr;
+	serializer(os) << cls_i << cls_j << negated << clsfr;
 }
 
 void classifier::pair_info::unserialize(istream &is) {
-	unserializer(is) >> cls_i >> cls_j >> clsfr;
+	unserializer(is) >> cls_i >> cls_j >> negated >> clsfr;
 	assert(cls_i > 0 && cls_j > 0);
 }
 
