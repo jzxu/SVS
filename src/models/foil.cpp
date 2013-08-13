@@ -426,7 +426,7 @@ void fix_variables(int num_auto_bound, clause &c) {
  So currently it looks like the false positive rate is the way to go.
 */
  
-double prune_clause(clause &c, const relation &neg, const relation_table &rels, logger_set *loggers) {
+int prune_clause(clause &c, const relation &neg, const relation_table &rels, logger_set *loggers) {
 	if (neg.empty()) {
 		return 0.0;
 	}
@@ -447,14 +447,7 @@ double prune_clause(clause &c, const relation &neg, const relation_table &rels, 
 	}
 	fix_variables(neg.arity(), c);
 	loggers->get(LOG_FOIL) << "pruned: " << c << endl;
-	return fp / static_cast<double>(neg.size());
-}
-
-double clause_fp_rate(const clause &c, const relation &neg, const relation_table &rels) {
-	if (neg.empty()) {
-		return 0.0;
-	}
-	return test_clause_n(c, true, neg, rels, NULL) / static_cast<double>(neg.size());
+	return fp;
 }
 
 void split_training(double ratio, const relation &all, relation &grow, relation &test) {
@@ -554,7 +547,6 @@ void FOIL::set_problem(const relation &p, const relation &n, const relation_tabl
 */
 bool FOIL::learn(bool prune, bool record_errors) {
 	relation pos_test, neg_test, pos_left;
-	double fp_rate;
 	bool dead;
 	
 	if (neg.empty()) {
@@ -579,13 +571,15 @@ bool FOIL::learn(bool prune, bool record_errors) {
 			choose_clause(ci.cl, NULL);
 		}
 		
-		clause old = ci.cl;
+		int fp, tp;
+		double fp_rate;
 		if (prune) {
-			fp_rate = prune_clause(ci.cl, neg_test, *rels, loggers);
+			fp = prune_clause(ci.cl, neg_test, *rels, loggers);
 		} else {
-			fp_rate = clause_fp_rate(ci.cl, neg_test, *rels);
+			fp = test_clause_n(ci.cl, true, neg_test, *rels, NULL);
 		}
-		
+		tp = test_clause_n(ci.cl, true, pos_test, *rels, NULL);
+		fp_rate = fp / static_cast<double>(tp + fp);
 		if (!ci.cl.empty() && fp_rate < MAX_CLAUSE_FP_RATE) {
 			vector<int> vars;
 			clause_vars(ci.cl, vars);
@@ -622,6 +616,10 @@ bool FOIL::learn(bool prune, bool record_errors) {
 			assert(pos_left.size() + covered_pos.size() == old_size);
 			dead = (pos_left.size() == old_size);
 		} else {
+			/*
+			 Something's wrong here. If the clause is discarded, the positive and
+			 negative examples it covered should be returned back to the grow set.
+			*/
 			clauses.pop_back();
 		}
 	}
