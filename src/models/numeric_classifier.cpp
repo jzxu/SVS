@@ -382,35 +382,31 @@ void dtree_classifier::choose_split(
 				++right_total;
 			}
 		}
-		for (int j = 0; j < n;) {
-			int a = sorted_dims[i][j];
-			if (!ex_usable[a]) {
-				++j;
+
+		double prev_val = INF;
+		int prev_cls = -1;
+		for (int j = 0; j < n; ++j) {
+			int k = sorted_dims[i][j];
+			if (!ex_usable[k]) {
 				continue;
 			}
 
-			++left_counts[classes[a]];
-			--right_counts[classes[a]];
-			++left_total;
-			--right_total;
-
-			int k;
-			for (k = j + 1; k < n && (data(a,i) == data(sorted_dims[i][k],i) || !ex_usable[sorted_dims[i][k]]); ++k)
-				;
-			if (k >= n)
-				break;
-
-			int b = sorted_dims[i][k];
-			assert(data(a,i) != data(b,i) && ex_usable[a] && ex_usable[b]);
-			if (classes[a] != classes[b]) {
+			double val = data(k, i);
+			int cls = classes[k];
+			if (prev_cls >= 0 && prev_val != val && prev_cls != cls) {
 				double e = split_entropy(left_counts, right_counts, left_total, right_total);
 				if (split_dim < 0 || e < best_entropy) {
 					split_dim = i;
-					split_val = (data(a, i) + data(b, i)) / 2;
+					split_val = (prev_val + val) / 2;
 					best_entropy = e;
 				}
 			}
-			j = k;
+			++left_counts[cls];
+			--right_counts[cls];
+			++left_total;
+			--right_total;
+			prev_val = val;
+			prev_cls = cls;
 		}
 	}
 }
@@ -425,6 +421,7 @@ void dtree_classifier::learn_rec(
 	choose_split(data, classes, sorted_dims, ex_usable, dim_usable);
 	if (split_dim < 0) {
 		cls = most_common_class(classes, ex_usable);
+		assert(cls >= 0);
 		return;
 	}
 
@@ -444,20 +441,25 @@ void dtree_classifier::learn_rec(
 	right = new dtree_classifier(depth+1);
 	left->learn_rec(data, classes, sorted_dims, left_ex_usable, dim_usable_next);
 	right->learn_rec(data, classes, sorted_dims, right_ex_usable, dim_usable_next);
+	assert((cls >= 0 && split_dim < 0) || (cls < 0 && split_dim >= 0));
 }
 
 class dim_sorter {
 public:
-	dim_sorter(const mat &data, int dim)
-	: data(data), dim(dim)
+	dim_sorter(const mat &data, const vector<int> &classes, int dim)
+	: data(data), classes(classes), dim(dim)
 	{}
 
 	bool operator()(int a, int b) const {
+		if (data(a, dim) == data(b, dim)) {
+			return classes[a] < classes[b];
+		}
 		return data(a, dim) < data(b, dim);
 	}
 
 private:
 	const mat &data;
+	const vector<int> &classes;
 	int dim;
 };
 
@@ -468,7 +470,7 @@ void dtree_classifier::learn(mat &data, const vector<int> &classes) {
 		for (int j = 0, jend = data.rows(); j < jend; ++j) {
 			sorted_dims[i][j] = j;
 		}
-		sort(sorted_dims[i].begin(), sorted_dims[i].end(), dim_sorter(data, i));
+		sort(sorted_dims[i].begin(), sorted_dims[i].end(), dim_sorter(data, classes, i));
 	}
 
 	vector<bool> ex_usable(data.rows(), true);
@@ -519,6 +521,8 @@ void dtree_classifier::inspect(ostream &os) const {
 }
 
 void dtree_classifier::serialize(ostream &os) const {
+	assert((cls >= 0 && split_dim < 0) || (cls < 0 && split_dim >= 0));
+
 	serializer(os) << "dtree" << depth << split_dim << split_val << cls
 	               << (left != NULL) << (right != NULL);
 	if (left) {
