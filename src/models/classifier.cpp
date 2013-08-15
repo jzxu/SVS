@@ -133,7 +133,7 @@ numeric_classifier *learn_numeric_classifier(const string &type, const relation 
 	}
 	for (int i = npos_test, j = nneg_train; i < ntest; ++i, ++j) {
 		assert(i < testx.rows() && i < test_classes.size() && j < neg_inds.size() && neg_inds[j] < allx.rows());
-		testx.row(i) = allx.row(neg_inds[i]);
+		testx.row(i) = allx.row(neg_inds[j]);
 		test_classes[i] = 1;
 	}
 
@@ -266,7 +266,7 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 		return const_vote;
 	}
 	
-	if (clauses.size() > 0) {
+	if (!clauses.empty()) {
 		var_domains domains;
 		domains[0].insert(0);       // rels is only for the current timestep, time should always be 0
 		domains[1].insert(sig[target].id);
@@ -275,15 +275,22 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 			const clause &cl = clauses[i].cl;
 			const numeric_classifier *nc = clauses[i].nc;
 			CSP csp(cl, rels);
-			if (csp.solve(domains)) {
+			var_domains assign = domains;
+			if (csp.solve(assign)) {
 				loggers->get(LOG_EM) << "matched clause:" << endl << cl << endl;
 				var_domains::const_iterator vi, viend;
-				for (vi = domains.begin(), viend = domains.end(); vi != viend; ++vi) {
+				int_tuple assign_tuple(assign.size());
+				int j;
+				for (j = 0, vi = assign.begin(), viend = assign.end(); vi != viend; ++j, ++vi) {
 					assert(vi->second.size() == 1);
-					loggers->get(LOG_EM) << vi->first << " = " << *vi->second.begin() << endl;
+					int var = vi->first, val = *vi->second.begin();
+					loggers->get(LOG_EM) << var << " = " << val << endl;
+					assign_tuple[j] = val;
 				}
 				if (nc) {
-					result = nc->classify(x);
+					rvec x1;
+					extract_vec(assign_tuple, x, sig, x1);
+					result = nc->classify(x1);
 					loggers->get(LOG_EM) << "NC votes for " << result << endl;
 					if (result == 0) {
 						matched_clause = i;
@@ -303,7 +310,13 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 	if (result == 1) {
 		// no matched clause, FOIL thinks this is a negative
 		if (neg_nc) {
-			result = 1 - neg_nc->classify(x);
+			int_tuple assign_tuple(2);
+			rvec x1;
+
+			assign_tuple[0] = 0;
+			assign_tuple[1] = sig[target].id;
+			extract_vec(assign_tuple, x, sig, x1);
+			result = neg_nc->classify(x1);
 			loggers->get(LOG_EM) << "No matched clauses, NC votes for " << result << endl;
 			used_nc = true;
 		} else {
@@ -366,7 +379,7 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 	if (nc_type != "none") {
 		for (int k = 0, kend = clauses.size(); k < kend; ++k) {
 			assert(clauses[k].nc == NULL);
-			if (clauses[k].success_rate < .5) {
+			if (clauses[k].success_rate < .75) {
 				double nc_success_rate;
 				numeric_classifier *nc = learn_numeric_classifier(nc_type, clauses[k].true_pos, clauses[k].false_pos, data, nc_success_rate);
 				if (nc_success_rate > clauses[k].success_rate) {
@@ -378,9 +391,10 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 			}
 		}
 		
-		if (neg_success_rate < .5) {
+		if (neg_success_rate < .75) {
 			double nc_success_rate;
-			numeric_classifier *nc = learn_numeric_classifier(nc_type, true_negatives, false_negatives, data, nc_success_rate);
+			// false_negatives = should be positives, true_negatives = should be negative
+			numeric_classifier *nc = learn_numeric_classifier(nc_type, false_negatives, true_negatives, data, nc_success_rate);
 			if (nc_success_rate > neg_success_rate) {
 				neg_nc = nc;
 				neg_success_rate = nc_success_rate;
