@@ -13,6 +13,7 @@ void print_first_arg(const relation &r, ostream &os) {
 }
 
 void extract_vec(const int_tuple &t, const rvec &x, const scene_sig &sig, rvec &out) {
+	vec3 target_pos;
 	out.resize(x.size());
 	int end = 0, s, n;
 	for (int i = 1, iend = t.size(); i < iend; ++i) {
@@ -27,6 +28,13 @@ void extract_vec(const int_tuple &t, const rvec &x, const scene_sig &sig, rvec &
 		}
 		assert(found);
 		out.segment(end, n) = x.segment(s, n);
+
+		// Center positions on target
+		if (i == 1) {
+			target_pos = x.segment(s, 3);
+		}
+		out.segment(end, 3) -= target_pos;
+
 		end += n;
 	}
 	out.conservativeResize(end);
