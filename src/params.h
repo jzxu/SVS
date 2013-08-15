@@ -65,7 +65,7 @@
 // px py pz rx ry rz sx sy sz
 #define NUM_NATIVE_PROPS 9
 
-#define INTERSECT_THRESH 1.0e-15
+#define INTERSECT_THRESH 1.0e-10
 
 #define RANSAC_MAX_ITERS 100
 #define RANSAC_LOG_ALARM_RATE -2.995732273553991  // log(0.05)
