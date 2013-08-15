@@ -363,6 +363,12 @@ bool linreg_d(regression_type t, mat &X, mat &Y, const cvec &w, double var, mat 
 		inter = coefs1.row(coefs1.rows() - 1);
 	} else {
 		inter = Ym - (Xm * coefs1);
+		double intercept_thresh = 0.01 * sqrt(var);
+		for (int i = 0, iend = inter.size(); i < iend; ++i) {
+			if (fabs(inter(i)) < intercept_thresh) {
+				inter(i) = 0.0;
+			}
+		}
 	}
 	
 	coefs.resize(xdim, ydim);
