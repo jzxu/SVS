@@ -206,9 +206,11 @@ int main(int argc, char *argv[]) {
 	subtract(make_run(3, 7));
 	
 	for (int i = 0; i < 100; ++i) {
-		unify(make_random(-100, 100, 50));
-		intersect(make_random(-100, 100, 50));
-		subtract(make_random(-100, 100, 50));
+		a = make_random(-1000, 1000, 100);
+		b = a;
+		unify(make_random(-1000, 1000, 100));
+		intersect(make_random(-1000, 1000, 100));
+		subtract(make_random(-1000, 1000, 100));
 	}
 	
 	return 0;
