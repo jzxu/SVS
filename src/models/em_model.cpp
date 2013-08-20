@@ -138,6 +138,7 @@ public:
 		bool success;
 
 		real_y = y(0);
+		mode = 0;
 		mode = em.predict(target, sig, rels, x, mode, y(0), vote_trace);
 		if (test) {
 			em.all_predictions(target, sig, x, all_preds);

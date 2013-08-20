@@ -468,10 +468,10 @@ void classifier::add_class() {
 
 void classifier::del_classes(const vector<int> &c) {
 	vector<int> class_map(classes.size());
-	int n;
+	int n = 1;
 
 	class_map[0] = 0;
-	for (int i = 1, iend = classes.size(), n = 1; i < iend; ++i) {
+	for (int i = 1, iend = classes.size(); i < iend; ++i) {
 		if (has(c, i)) {
 			if (!classes[i]->mem_rel.empty()) {
 				cout << "ERROR: deleting non-empty class" << endl;
@@ -487,8 +487,9 @@ void classifier::del_classes(const vector<int> &c) {
 			class_map[i] = n++;
 		}
 	}
+
+	assert(n == classes.size() - c.size());
 	classes.resize(n);
-	assert(!classes.empty());
 	
 	std::list<pair_info*>::iterator i, iend;
 	for (i = pairs.begin(), iend = pairs.end(); i != iend; ) {
