@@ -49,7 +49,7 @@ filter_table::filter_table() {
 	add(centroid_distance_fill_entry());
 	add(distance_xyz_fill_entry());
 	add(smaller_fill_entry());
-	add(linear_fill_entry());
+	//add(linear_fill_entry());   // this is causing problems right now because z coordinate is not taken into account.
 	add(bbox_fill_entry());
 	add(bbox_int_fill_entry());
 	add(bbox_contains_fill_entry());

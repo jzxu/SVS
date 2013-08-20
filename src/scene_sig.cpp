@@ -79,7 +79,9 @@ void scene_sig::print_with_vals(const rvec &x, ostream &os) const {
 		for (int j = 0, jend = e.props.size(); j < jend; ++j) {
 			t.add_row() << k;
 			if (j == 0) {
-				t << e.name;
+				stringstream ss;
+				ss << e.name << '(' << e.id << ')';
+				t << ss.str();
 			} else {
 				t << "";
 			}
