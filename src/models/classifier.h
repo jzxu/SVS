@@ -45,7 +45,6 @@ public:
 
 	void set_loggers(logger_set *loggers) { this->loggers = loggers; }
 private:
-	int const_vote;
 	std::vector<clause_info> clauses;
 	
 	relation false_negatives, true_negatives;
@@ -68,7 +67,7 @@ public:
 	void del_classes(const std::vector<int> &c);
 	
 	void update_class(int i, int old_class, int new_class);
-	void classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &votes, rvec &trace);
+	void classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &votes, rvec &trace) const;
 
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);

@@ -155,11 +155,11 @@ numeric_classifier *learn_numeric_classifier(const string &type, const relation 
 }
 
 binary_classifier::binary_classifier()
-: const_vote(0), neg_nc(NULL), loggers(NULL), neg_success_rate(0.0)
+: neg_nc(NULL), loggers(NULL), neg_success_rate(0.0)
 {}
 
 binary_classifier::binary_classifier(logger_set *loggers)
-: const_vote(0), neg_nc(NULL), loggers(loggers), neg_success_rate(0.0)
+: neg_nc(NULL), loggers(loggers), neg_success_rate(0.0)
 {}
 
 binary_classifier::~binary_classifier() {
@@ -169,7 +169,7 @@ binary_classifier::~binary_classifier() {
 }
 
 void binary_classifier::serialize(ostream &os) const {
-	serializer(os) << const_vote << clauses 
+	serializer(os) << clauses 
 	               << false_negatives << true_negatives
 				   << neg_success_rate
 	               << (neg_nc != NULL);
@@ -180,7 +180,7 @@ void binary_classifier::serialize(ostream &os) const {
 
 void binary_classifier::unserialize(istream &is) {
 	bool has_negnc;
-	unserializer(is) >> const_vote >> clauses 
+	unserializer(is) >> clauses 
 	                 >> false_negatives >> true_negatives
 				     >> neg_success_rate
 	                 >> has_negnc;
@@ -192,11 +192,6 @@ void binary_classifier::unserialize(istream &is) {
 }
 
 void binary_classifier::inspect(ostream &os) const {
-	if (clauses.empty() && !neg_nc) {
-		os << "Constant Vote: " << const_vote << endl;
-		return;
-	}
-	
 	table_printer t;
 	t.add_row() << "#" << "clause" << "Correct" << "Incorrect" << "NumCls?";
 	for (int i = 0, iend = clauses.size(); i < iend; ++i) {
@@ -208,11 +203,6 @@ void binary_classifier::inspect(ostream &os) const {
 }
 
 void binary_classifier::inspect_detailed(ostream &os) const {
-	if (clauses.empty() && !neg_nc) {
-		os << "Constant Vote: " << const_vote << endl;
-		return;
-	}
-	
 	if (clauses.empty()) {
 		os << "No clauses" << endl;
 	} else {
@@ -261,11 +251,6 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 	matched_clause = -1;
 	used_nc = false;
 
-	if (clauses.empty() && !neg_nc) {
-		loggers->get(LOG_EM) << "Constant vote for " << const_vote << endl;
-		return const_vote;
-	}
-	
 	if (!clauses.empty()) {
 		var_domains domains;
 		domains[0].insert(0);       // rels is only for the current timestep, time should always be 0
@@ -338,12 +323,7 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 		neg_nc = NULL;
 	}
 	
-	const_vote = mem_i.size() > mem_j.size() ? 0 : 1;
-	if (mem_i.empty() || mem_j.empty()) {
-		return;
-	}
-	
-	if (use_foil) {
+	if (use_foil && !mem_i.empty() && !mem_j.empty()) {
 		FOIL foil(loggers);
 		foil.set_problem(mem_i, mem_j, rels);
 		foil.learn(prune, true);
@@ -508,6 +488,7 @@ void classifier::del_classes(const vector<int> &c) {
 		}
 	}
 	classes.resize(n);
+	assert(!classes.empty());
 	
 	std::list<pair_info*>::iterator i, iend;
 	for (i = pairs.begin(), iend = pairs.end(); i != iend; ) {
@@ -614,8 +595,8 @@ void classifier::update() {
 	}
 }
 
-void classifier::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &votes, rvec &vote_trace) {
-	update();
+void classifier::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &votes, rvec &vote_trace) const {
+	const_cast<classifier*>(this)->update();
 	votes.clear();
 	votes.resize(classes.size(), 0);
 	
