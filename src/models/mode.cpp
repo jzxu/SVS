@@ -424,10 +424,9 @@ bool em_mode::update_fits(double noise_var) {
 	return true;
 }
 
-void em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> &ex_omap, double &y) const {
+double em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> &ex_omap) const {
 	if (lin_coefs.size() == 0) {
-		y = lin_inter(0);
-		return;
+		return lin_inter(0);
 	}
 	
 	assert(ex_omap.size() == sig.size());
@@ -440,7 +439,7 @@ void em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> &e
 		xsize += n;
 	}
 	xc.conservativeResize(xsize);
-	y = ((xc * lin_coefs) + lin_inter)(0);
+	return ((xc * lin_coefs) + lin_inter)(0);
 }
 
 void em_mode::add_example(int t, const vector<int> &ex_obj_map, double noise_var) {
@@ -467,8 +466,7 @@ void em_mode::add_example(int t, const vector<int> &ex_obj_map, double noise_var
 	if (noise) {
 		sorted_ys.insert(make_pair(d.y(0), t));
 	} else {
-		double py;
-		predict(*d.sig, d.x, ex_obj_map, py);
+		double py = predict(*d.sig, d.x, ex_obj_map);
 		if (fabs(d.y(0) - py) > sqrt(noise_var) * NUM_STDEVS_THRESH) {
 			stale = true;
 		}

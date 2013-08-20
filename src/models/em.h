@@ -54,14 +54,15 @@ public:
 class EM : public serializable, public cliproxy {
 public:
 	EM(const model_train_data &data, logger_set *loggers);
-	EM(const model_train_data &data, logger_set *loggers, bool use_em, bool use_unify, bool learn_new_modes);
+	EM(const model_train_data &data, logger_set *loggers, bool use_unify, bool learn_new_modes);
 	~EM();
 	
 	void add_data(int t);
 	bool run(int maxiters);
-	bool predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int &mode, double &y, rvec &vote_trace);
+	int  predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int mode, double &y, rvec &vote_trace) const;
 	// Return the mode with the model that best fits (x, y)
-	int best_mode(int target, const scene_sig &sig, const rvec &x, double y, double &besterror) const;
+	int  best_mode(int target, const scene_sig &sig, const rvec &x, double y, double &besterror) const;
+	void all_predictions(int target, const scene_sig &sig, const rvec &x, rvec &preds) const;
 	
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
@@ -85,7 +86,7 @@ private:
 	em_mode *add_mode(bool manual);
 	bool remove_modes();
 
-	int classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &obj_map, rvec &vote_trace);
+	int classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &obj_map, rvec &vote_trace) const;
 	
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void cli_error_table(std::ostream &os) const;
@@ -98,7 +99,7 @@ private:
 	sig_table sigs;
 	classifier clsfr;
 	
-	bool use_em, use_unify, learn_new_modes;
+	bool use_unify, learn_new_modes;
 
 	/*
 	 Keeps track of the minimum number of new noise examples needed before we have
