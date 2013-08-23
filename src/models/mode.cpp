@@ -88,17 +88,17 @@ em_mode::em_mode(bool noise, bool manual, const model_train_data &data, logger_s
 	
 }
 
-void em_mode::get_params(scene_sig &sig, rvec &coefs, double &intercept) const {
+void em_mode::get_params(scene_sig &sig, rvec &coefs, double &inter) const {
 	sig = this->sig;
-	coefs = lin_coefs.col(0);
-	intercept = lin_inter(0);
+	coefs = coefficients;
+	inter = intercept;
 }
 
-void em_mode::set_params(const scene_sig &dsig, int target, const mat &coefs, const rvec &inter) {
+void em_mode::set_params(const scene_sig &dsig, int target, const rvec &coefs, double inter) {
 	n_nonzero = 0;
-	lin_inter = inter;
+	intercept = inter;
 	if (coefs.size() == 0) {
-		lin_coefs.resize(0, 0);
+		coefficients.resize(0);
 	} else {
 		// find relevant objects (with nonzero coefficients)
 		vector<int> relevant_objs;
@@ -111,7 +111,7 @@ void em_mode::set_params(const scene_sig &dsig, int target, const mat &coefs, co
 			int end = start + dsig[i].props.size();
 			bool relevant = false;
 			for (int j = start; j < end; ++j) {
-				if (!coefs.row(j).isConstant(0.0)) {
+				if (coefs(j) != 0.0) {
 					++n_nonzero;
 					relevant = true;
 				}
@@ -122,16 +122,16 @@ void em_mode::set_params(const scene_sig &dsig, int target, const mat &coefs, co
 		}
 		
 		int end = 0;
-		lin_coefs.resize(coefs.rows(), 1);
+		coefficients.resize(coefs.size());
 		sig.clear();
 		for (int i = 0; i < relevant_objs.size(); ++i) {
 			const scene_sig::entry &e = dsig[relevant_objs[i]];
 			sig.add(e);
 			int start = e.start, n = e.props.size();
-			lin_coefs.block(end, 0, n, 1) = coefs.block(start, 0, n, 1);
+			coefficients.segment(end, n) = coefs.segment(start, n);
 			end += n;
 		}
-		lin_coefs.conservativeResize(end, 1);
+		coefficients.conservativeResize(end);
 		
 		if (obj_maps.size() == 0) {
 			obj_map_entry e;
@@ -260,11 +260,11 @@ void em_mode::proxy_use_sub(const vector<string> &args, ostream &os) {
 		int ci = 0;
 		for (int i = 0; i < sig.size(); ++i) {
 			for (int j = 0; j < sig[i].props.size(); ++j) {
-				t.add_row() << ci << sig[i].type << sig[i].props[j] << lin_coefs(ci++, 0);
+				t.add_row() << ci << sig[i].type << sig[i].props[j] << coefficients(ci++);
 			}
 		}
 		t.print(os);
-		os << endl << "intercept " << lin_inter << endl;
+		os << endl << "intercept " << intercept << endl;
 	}
 }
 
@@ -300,12 +300,12 @@ void em_mode::cli_sig(ostream &os) const {
 */
 void em_mode::serialize(ostream &os) const {
 	serializer(os) << stale << new_fit << members << obj_maps << sig << obj_clauses << sorted_ys
-	               << lin_coefs << lin_inter << n_nonzero << manual << obj_clauses_stale;
+	               << coefficients << intercept << n_nonzero << manual << obj_clauses_stale;
 }
 
 void em_mode::unserialize(istream &is) {
 	unserializer(is) >> stale >> new_fit >> members >> obj_maps >> sig >> obj_clauses >> sorted_ys
-	                 >> lin_coefs >> lin_inter >> n_nonzero >> manual >> obj_clauses_stale;
+	                 >> coefficients >> intercept >> n_nonzero >> manual >> obj_clauses_stale;
 }
 
 double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, double y, double noise_var, vector<int> &best_assign) const {
@@ -327,14 +327,12 @@ double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, dou
 	 the mode signature.
 	*/
 	
-	rvec py;
 	best_assign.clear();
 
 	if (sig.empty()) {
 		// should be constant prediction
-		assert(lin_coefs.size() == 0);
-		py = lin_inter;
-		return fabs(y - py(0));
+		assert(coefficients.size() == 0);
+		return fabs(y - intercept);
 	}
 	
 	/*
@@ -372,8 +370,8 @@ double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, dou
 		}
 		assert(s == xlen);
 		
-		py = (xc * lin_coefs) + lin_inter;
-		double error = fabs(y - py(0));
+		double py = xc.dot(coefficients) + intercept;
+		double error = fabs(y - py);
 		if (error < best_error) {
 			best_error = error;
 			best_assign = assign;
@@ -387,8 +385,8 @@ bool em_mode::update_fits(double noise_var) {
 		return false;
 	}
 	if (members.empty()) {
-		lin_coefs.setConstant(0);
-		lin_inter.setConstant(0);
+		coefficients.resize(0);
+		intercept = 0.0;
 		return false;
 	}
 	int xcols = 0;
@@ -418,15 +416,19 @@ bool em_mode::update_fits(double noise_var) {
 			Y.row(j++) = d.y;
 		}
 	}
-	linreg_d(REGRESSION_ALG, X, Y, cvec(), noise_var, lin_coefs, lin_inter);
+	mat coefs;
+	rvec inter;
+	linreg_d(REGRESSION_ALG, X, Y, cvec(), noise_var, coefs, inter);
+	coefficients = coefs.col(0);
+	intercept = inter(0);
 	stale = false;
 	new_fit = true;
 	return true;
 }
 
 double em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> &ex_omap) const {
-	if (lin_coefs.size() == 0) {
-		return lin_inter(0);
+	if (coefficients.size() == 0) {
+		return intercept;
 	}
 	
 	assert(ex_omap.size() == sig.size());
@@ -439,7 +441,7 @@ double em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> 
 		xsize += n;
 	}
 	xc.conservativeResize(xsize);
-	return ((xc * lin_coefs) + lin_inter)(0);
+	return xc.dot(coefficients) + intercept;
 }
 
 void em_mode::add_example(int t, const vector<int> &ex_obj_map, double noise_var) {
@@ -543,7 +545,7 @@ void em_mode::get_function_string(string &s) const {
 	bool first = true;
 	for (int i = 0, iend = sig.size(); i < iend; ++i) {
 		for (int j = 0, jend = sig[i].props.size(); j < jend; ++j, ++k) {
-			double c = lin_coefs(k, 0);
+			double c = coefficients(k);
 			if (c == 0.0) {
 				continue;
 			} else if (first) {
@@ -569,11 +571,11 @@ void em_mode::get_function_string(string &s) const {
 	}
 	
 	if (first) {
-		ss << lin_inter(0);
-	} else if (lin_inter(0) > 0.0) {
-		ss << " + " << lin_inter(0);
-	} else if (lin_inter(0) < 0.0) {
-		ss << " - " << fabs(lin_inter(0));
+		ss << intercept;
+	} else if (intercept > 0.0) {
+		ss << " + " << intercept;
+	} else if (intercept < 0.0) {
+		ss << " - " << -intercept;
 	}
 	s = ss.str();
 }

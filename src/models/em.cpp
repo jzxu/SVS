@@ -557,7 +557,7 @@ bool EM::unify_or_add_mode() {
 			if (unified_size >= m.size() + .9 * largest.size()) {
 				loggers->get(LOG_EM) << "Successfully unified with mode " << j << endl;
 				const model_train_inst &d0 = data.get_inst(combined.ith(subset[0]));
-				m.set_params(*d0.sig, d0.target, ucoefs, uinter);
+				m.set_params(*d0.sig, d0.target, ucoefs.col(0), uinter(0));
 				return true;
 			}
 			loggers->get(LOG_EM) << "Failed to unify with mode " << j << endl;
@@ -566,7 +566,7 @@ bool EM::unify_or_add_mode() {
 	
 	em_mode *new_mode = add_mode(false);
 	const model_train_inst &d0 = data.get_inst(largest[0]);
-	new_mode->set_params(*d0.sig, d0.target, coefs, inter);
+	new_mode->set_params(*d0.sig, d0.target, coefs.col(0), inter(0));
 
 	loggers->get(LOG_EM) << "Adding new mode " << modes.size() - 1 << endl << "coefs =";
 	for (int i = 0; i < coefs.rows(); ++i) {
@@ -728,10 +728,9 @@ void EM::cli_add_mode(const vector<string> &args, ostream &os) {
 	}
 	
 	const model_train_inst &inst = data.get_last_inst();
-	mat coefs(inst.sig->dim(), 1);
-	rvec intercept(1);
+	rvec coefs(inst.sig->dim());
+	double intercept;
 	coefs.setConstant(0.0);
-	intercept.setConstant(0.0);
 	
 	for (int i = 0, iend = args.size(); i < iend; i += 2) {
 		double c;
@@ -741,7 +740,7 @@ void EM::cli_add_mode(const vector<string> &args, ostream &os) {
 		}
 		
 		if (i + 1 >= args.size()) {
-			intercept(0) = c;
+			intercept = c;
 			break;
 		}
 		
@@ -757,8 +756,8 @@ void EM::cli_add_mode(const vector<string> &args, ostream &os) {
 			os << args[i+1] << " not found" << endl;
 			return;
 		}
-		assert(prop_ind >= 0 && prop_ind < coefs.rows());
-		coefs(prop_ind, 0) = c;
+		assert(prop_ind >= 0 && prop_ind < coefs.size());
+		coefs(prop_ind) = c;
 	}
 	
 	em_mode *new_mode = add_mode(true);

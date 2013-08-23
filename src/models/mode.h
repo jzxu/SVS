@@ -30,7 +30,7 @@ public:
 	bool update_fits(double noise_var);
 	
 	void get_params(scene_sig &sig, rvec &coefs, double &intercepts) const;
-	void set_params(const scene_sig &dsig, int target, const mat &coefs, const rvec &inter);
+	void set_params(const scene_sig &dsig, int target, const rvec &coefs, double inter);
 	bool uniform_sig(int sig, int target) const;
 	void get_members(interval_set &m) const;
 
@@ -74,8 +74,8 @@ private:
 	bool stale, noise, new_fit, manual;
 	const model_train_data &data;
 	
-	mat lin_coefs;
-	rvec lin_inter;
+	rvec coefficients;
+	double intercept;
 	int n_nonzero;
 	scene_sig sig;
 	
