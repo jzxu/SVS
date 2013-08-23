@@ -476,7 +476,7 @@ bool EM::unify_or_add_mode() {
 	}
 	
 	vector<int> largest;
-	mat coefs;
+	mat coefs(0,1);
 	rvec inter;
 	modes[0]->largest_const_subset(largest);
 	int potential = largest.size();

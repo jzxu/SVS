@@ -70,6 +70,7 @@ numeric_classifier *learn_numeric_classifier(const string &type, const relation 
 	int ntest = npos_test + nneg_test;
 	int ntrain = npos_train + nneg_train;
 	
+	success_rate = 0.0;
 	if (npos_train < MIN_BLOCK || nneg_train < MIN_BLOCK) {
 		return NULL;
 	}
@@ -362,7 +363,7 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 			if (clauses[k].success_rate < .75) {
 				double nc_success_rate;
 				numeric_classifier *nc = learn_numeric_classifier(nc_type, clauses[k].true_pos, clauses[k].false_pos, data, nc_success_rate);
-				if (nc_success_rate > clauses[k].success_rate) {
+				if (nc && nc_success_rate > clauses[k].success_rate) {
 					clauses[k].nc = nc;
 					clauses[k].success_rate = nc_success_rate;
 				} else {
@@ -375,7 +376,7 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 			double nc_success_rate;
 			// false_negatives = should be positives, true_negatives = should be negative
 			numeric_classifier *nc = learn_numeric_classifier(nc_type, false_negatives, true_negatives, data, nc_success_rate);
-			if (nc_success_rate > neg_success_rate) {
+			if (nc && nc_success_rate > neg_success_rate) {
 				neg_nc = nc;
 				neg_success_rate = nc_success_rate;
 			} else {
