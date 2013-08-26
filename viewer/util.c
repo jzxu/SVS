@@ -194,7 +194,6 @@ void semaphore_P(semaphore *s) {
 	glfwLockMutex(s->mutex);
 	while (s->count == 0) {
 		glfwWaitCond(s->cond, s->mutex, GLFW_INFINITY); // implicitly unlocks mutex
-		glfwLockMutex(s->mutex);
 	}
 	s->count = 0;
 	glfwUnlockMutex(s->mutex);
@@ -204,7 +203,7 @@ void semaphore_V(semaphore *s) {
 	glfwLockMutex(s->mutex);
 	s->count = 1;
 	glfwUnlockMutex(s->mutex);
-	glfwSignalCond(s->cond);
+	glfwBroadcastCond(s->cond);
 }
 
 int qhull(real verts[], int nverts, int indexes[], int max_indexes) {
