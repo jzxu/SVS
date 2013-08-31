@@ -168,6 +168,13 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 	mat coefs_in;
 	rvec inter_in;
 	cvec dummy;
+	int num_nonzero = 0;
+
+	for (int i = 0, iend = coefs.rows(); i < iend; ++i) {
+		if (coefs(i, 0) != 0) {
+			++num_nonzero;
+		}
+	}
 
 	holdout_size = X.rows() * .3;
 	if (holdout_size < 2) {
@@ -198,17 +205,30 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 		}
 		
 		assert(coefs_in.rows() == coefs.rows());
+		int n = 0;
 		for (int i = 0, iend = coefs_in.rows(); i < iend; ++i) {
-			if (sign(coefs_in(i, 0)) != sign(coefs(i, 0))) {
-				return true;
+			if (coefs_in(i,0) != 0.0) {
+				++n;
 			}
+		}
+		if (n > num_nonzero) {
+			return true;
 		}
 		holdout_start += holdout_size;
 	}
 	return false;
 }
 
-void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int split,
+/*
+ Added the check_spurious parameter to allow only checking for spurious
+ regressors when looking for linear relationships in noise data, but not during
+ unification. This is because during unification, it's often the case that the
+ existing mode will have a large number of examples, while the new mode will
+ have very few members. In this case, extra legitimate coefficients introduced
+ during the unification will likely be considered spurious, and discarded. We
+ want to avoid doing this.
+*/
+void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int split, bool check_spurious,
             vector<int> &subset, mat &coefs, rvec &intercept)
 {
 	vector<int> mss, fit_set;
@@ -276,7 +296,7 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 			mat Xsub, Ysub;
 			pick_rows(X, fit_set, Xsub);
 			pick_rows(Y, fit_set, Ysub);
-			if (!find_spurious_regressors(Xsub, Ysub, noise_var, C)) {
+			if (!check_spurious || !find_spurious_regressors(Xsub, Ysub, noise_var, C)) {
 				subset = fit_set;
 				coefs = C;
 				intercept = inter;
@@ -495,7 +515,7 @@ bool EM::unify_or_add_mode() {
 			interval_set inds(ns);
 			vector<int> subset;
 			fill_xy(inds, X, Y);
-			ransac(X, Y, noise_var, NEW_MODE_THRESH, 0, subset, coefs, inter);
+			ransac(X, Y, noise_var, NEW_MODE_THRESH, 0, true, subset, coefs, inter);
 			if (subset.size() > potential) {
 				potential = subset.size();
 			}
@@ -511,13 +531,13 @@ bool EM::unify_or_add_mode() {
 		}
 	}
 	
+	loggers->get(LOG_EM) << "unify_or_add_mode: found " << largest.size() << " colinear examples in noise." << endl;
+
 	if (largest.size() < NEW_MODE_THRESH) {
 		check_after += (NEW_MODE_THRESH - potential);
 		return false;
 	}
 	
-	loggers->get(LOG_EM) << "Found " << largest.size() << " colinear examples in noise." << endl;
-
 	/*
 	 From here I know the noise data is going to either become a new mode or unify
 	 with an existing mode, so reset check_after assuming the current noise is
@@ -543,21 +563,43 @@ bool EM::unify_or_add_mode() {
 				continue;
 			}
 	
-			interval_set combined;
 			vector<int> subset;
-			m.get_members(combined);
-			for (int k = 0, kend = largest.size(); k < kend; ++k) {
-				combined.insert(largest[k]);
+			const interval_set &old = m.get_members();
+			int nrows = old.size() + largest.size();
+			int ncols = data.get_inst(old.ith(0)).x.size();
+			int thresh = old.size() + .9 * largest.size();
+
+			X.resize(nrows, ncols);
+			Y.resize(nrows, 1);
+
+			interval_set::const_iterator oi, oiend;
+			int k = 0;
+			for (oi = old.begin(), oiend = old.end(); oi != oiend; ++oi, ++k) {
+				int i = *oi;
+				X.row(k) = data.get_inst(i).x;
+				Y.row(k) = data.get_inst(i).y;
 			}
-			fill_xy(combined, X, Y);
+			for (int l = 0, lend = largest.size(); l < lend; ++l, ++k) {
+				X.row(k) = data.get_inst(largest[l]).x;
+				Y.row(k) = data.get_inst(largest[l]).y;
+			}
+
 			loggers->get(LOG_EM) << "Trying to unify with mode " << j << endl;
-			ransac(X, Y, noise_var, 0.9 * combined.size(), m.size(), subset, ucoefs, uinter);
-			int unified_size = subset.size();
-			
-			if (unified_size >= m.size() + .9 * largest.size()) {
+			ransac(X, Y, noise_var, thresh, old.size(), false, subset, ucoefs, uinter);
+			if (subset.size() >= thresh) {
 				loggers->get(LOG_EM) << "Successfully unified with mode " << j << endl;
-				const model_train_inst &d0 = data.get_inst(combined.ith(subset[0]));
-				m.set_params(*d0.sig, d0.target, ucoefs.col(0), uinter(0));
+
+				/* all this up to the assert is just error checking, can get rid of it later */
+				int subset_inst;
+				if (subset[0] < old.size()) {
+					subset_inst = old.ith(subset[0]);
+				} else {
+					subset_inst = largest[subset[0] - old.size()];
+				}
+				const model_train_inst &d0 = data.get_inst(subset_inst);
+				assert(seed_sig == d0.sig_index && seed_target == d0.target);
+				/* end error checking */
+				m.set_params(*data.get_sig(seed_sig), seed_target, ucoefs.col(0), uinter(0));
 				return true;
 			}
 			loggers->get(LOG_EM) << "Failed to unify with mode " << j << endl;

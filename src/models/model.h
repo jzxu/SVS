@@ -55,6 +55,7 @@ public:
 	const relation_table &get_all_rels()     const { return all_rels; }
 	const relation_table &get_context_rels() const { return context_rels; }
 	
+	const scene_sig* get_sig(int i) const { return sigs[i]; }
 	std::vector<const scene_sig*> get_sigs() const {
 		return std::vector<const scene_sig*>(sigs.begin(), sigs.end());
 	}

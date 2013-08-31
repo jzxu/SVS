@@ -530,10 +530,6 @@ int em_mode::get_num_nonzero_coefs() const {
 	return n_nonzero;
 }
 
-void em_mode::get_members(interval_set &mem) const {
-	mem = members;
-}
-
 void em_mode::get_function_string(string &s) const {
 	if (noise) {
 		s = "noise";
