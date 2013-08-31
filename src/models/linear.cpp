@@ -151,6 +151,10 @@ void sweep(const mat &A, int k, rvec &work, mat &B) {
 void sweep_last_col(const mat &A, int k, mat &B) {
 	int n = A.rows(), last = n-1;
 	double x = A(k,last) / A(k,k);
+	if (!isfinite(x)) {
+		B.col(last).setConstant(INF);
+		return;
+	}
 	for (int i = 0; i < n; ++i) {
 		B(i,last) = A(i,last) - A(i,k) * x;
 	}
@@ -177,9 +181,9 @@ bool fstep(const_mat_view X, const_mat_view Y, double var, mat &coefs_out) {
 	int n = X.rows(), m = X.cols(), p = 0;
 	vector<bool> used(m, false);
 	cvec y = Y.col(0);
-	cvec coefs;
-	rvec work(m);
-	mat A, Anext;
+	cvec coefs(m), c(m);
+	rvec work(m+1);
+	mat A(m+1,m+1), Anext(m+1,m+1);
 	double curr_Cp;
 
 	/*
@@ -188,14 +192,11 @@ bool fstep(const_mat_view X, const_mat_view Y, double var, mat &coefs_out) {
 	 | X'X  X'y |
 	 | y'X  y'y |
 	*/
-	A.resize(m + 1, m + 1);
-	Anext.resize(m + 1, m + 1);
 	A.topLeftCorner(m, m) = X.transpose() * X;
 	A.topRightCorner(m, 1) = X.transpose() * y;
 	A(m, m) = y.dot(y);
 	complete_symmetric_mat(A);
 
-	coefs.resize(m);
 	coefs.setConstant(0.0);
 	curr_Cp = A(m,m) / var - n + 2; // Mallow's Cp statistic
 	                                // Estimates model out-of-sample performance
@@ -203,36 +204,30 @@ bool fstep(const_mat_view X, const_mat_view Y, double var, mat &coefs_out) {
 
 	while (p < m) {
 		++p;
-		double best_Cp = 0;
-		int best_pred = -1;
-		cvec best_c;
+		int new_pred = -1;
 		for (int i = 0; i < m; ++i) {
 			if (used[i]) { continue; }
 
 			sweep_last_col(A, i, Anext);
-			cvec c = Anext.topRightCorner(m, 1);
+			c.setConstant(0.0);
+			c(i) = Anext(i,m);
 			for (int j = 0; j < m; ++j) {
-				if (!used[j] && j != i) {
-					c(j) = 0.0;
+				if (used[j]) {
+					c(j) = Anext(j,m);
 				}
 			}
 			double rss = Anext(m,m);
 			double Cp = rss / var - n + 2 * (p+1);
-			if (best_pred < 0 || Cp < best_Cp || 
-			    (Cp == best_Cp && c.squaredNorm() < best_c.squaredNorm()))
+			if (Cp < curr_Cp || (Cp == curr_Cp && c.squaredNorm() < coefs.squaredNorm()))
 			{
-				best_Cp = Cp;
-				best_c = c;
-				best_pred = i;
+				curr_Cp = Cp;
+				coefs = c;
+				new_pred = i;
 			}
 		}
-		if (best_Cp < curr_Cp ||
-		    (best_Cp == curr_Cp && best_c.squaredNorm() < coefs.squaredNorm()))
-		{
-			used[best_pred] = true;
-			curr_Cp = best_Cp;
-			coefs = best_c;
-			sweep(A, best_pred, work, Anext);
+		if (new_pred >= 0) {
+			used[new_pred] = true;
+			sweep(A, new_pred, work, Anext);
 			A = Anext;
 		} else {
 			break;
