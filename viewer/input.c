@@ -161,12 +161,17 @@ int proc_geom_cmd(geometry *gs[], int ngeoms, char *fields[]) {
 				pos_set = 1;
 				f += 4;
 				break;
-			case 'r':  /* rotation */
+			case 'r':  /* rotation as quaternion; change later to q*/
+			case 'x':  /* rotation as axis - angle */
 				if (parse_nums(&fields[f+1], 4, rot) != 4) {
 					fprintf(stderr, "invalid rotation\n");
 					return 0;
 				}
-				rot_set = 1;
+				if (fields[f][0] == 'r') {
+					rot_set = 1;
+				} else {
+					rot_set = 2;
+				}
 				f += 5;
 				break;
 			case 's':  /* scale */
@@ -231,7 +236,14 @@ int proc_geom_cmd(geometry *gs[], int ngeoms, char *fields[]) {
 		if (pos_set)   copy_vec3(pos, gs[i]->pos);
 		if (scale_set) copy_vec3(scale, gs[i]->scale);
 		if (color_set) copy_vec3(color, gs[i]->color);
-		if (rot_set)   quat_to_axis_angle(rot, gs[i]->axis, &gs[i]->angle);
+		if (rot_set == 1) {
+			quat_to_axis_angle(rot, gs[i]->axis, &gs[i]->angle);
+		} else if (rot_set == 2) {
+			gs[i]->axis[0] = rot[0];
+			gs[i]->axis[1] = rot[1];
+			gs[i]->axis[2] = rot[2];
+			gs[i]->angle = rot[3];
+		}
 		
 		if (radius >= 0.0) {
 			set_geom_radius(gs[i], radius);
