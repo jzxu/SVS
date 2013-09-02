@@ -31,7 +31,7 @@ public:
 	
 	void get_params(scene_sig &sig, rvec &coefs, double &intercepts) const;
 	void set_params(const scene_sig &dsig, int target, const rvec &coefs, double inter);
-	bool uniform_sig(int sig, int target) const;
+	bool unifiable(int sig, int target) const;
 
 	const interval_set &get_members() const { return members; }
 	int size() const { return members.size(); }

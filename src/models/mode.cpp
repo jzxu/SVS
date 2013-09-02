@@ -511,15 +511,17 @@ void em_mode::largest_const_subset(vector<int> &subset) {
 	}
 }
 
-bool em_mode::uniform_sig(int sig, int target) const {
+bool em_mode::unifiable(int sig, int target) const {
+	bool uniform_sig = true;
 	interval_set::const_iterator i, iend;
 	for (i = members.begin(), iend = members.end(); i != iend; ++i) {
 		const model_train_inst &d = data.get_inst(*i);
 		if (d.sig_index != sig || d.target != target) {
-			return false;
+			uniform_sig = false;
+			break;
 		}
 	}
-	return true;
+	return !manual && uniform_sig && obj_maps.size() == 1;
 }
 
 int em_mode::get_num_nonzero_coefs() const {

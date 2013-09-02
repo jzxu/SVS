@@ -559,7 +559,7 @@ bool EM::unify_or_add_mode() {
 		for (int j = 1, jend = modes.size(); j < jend; ++j) {
 			em_mode &m = *modes[j];
 	
-			if (m.is_manual() || !m.uniform_sig(seed_sig, seed_target)) {
+			if (!m.unifiable(seed_sig, seed_target)) {
 				continue;
 			}
 	
