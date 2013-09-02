@@ -51,6 +51,7 @@ test_foil        = common + ['foil', 'test_foil']
 test_intervalset = common + ['test_intervalset']
 test_csp         = common + ['foil', 'test_csp']
 combine_rels     = common + ['combine_rels']
+lr               = common + ['lr', 'linear' ]
 
 test_em = common + [
 	'scene_sig',
@@ -71,10 +72,11 @@ test_em = common + [
 	'test_em',
 ]
 
-exe('run_lda', run_lda)
+#exe('run_lda', run_lda)
 #exe('run_foil', run_foil)
 #exe('combine_rels', combine_rels)
 #exe('test_foil', test_foil)
 #exe('test_intervalset', test_intervalset)
 #exe('test_csp', test_csp)
 #exe('test_em', test_em)
+exe('lr', lr)
