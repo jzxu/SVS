@@ -95,7 +95,7 @@ private:
 	
 	logger_set *loggers;
 
-	void learn_obj_clauses(const relation_table &rels) const;
+	void update_obj_clauses() const;
 	
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);

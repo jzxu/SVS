@@ -156,7 +156,7 @@ bool em_mode::map_objs(int target, const scene_sig &dsig, const relation_table &
 	mapping.resize(sig.empty() ? 1 : sig.size(), -1);
 	mapping[0] = target;  // target always maps to target
 	
-	learn_obj_clauses(data.get_all_rels());
+	update_obj_clauses();
 	
 	var_domains domains;
 	// 0 = time, 1 = target, 2 = object we're searching for
@@ -199,11 +199,12 @@ bool em_mode::map_objs(int target, const scene_sig &dsig, const relation_table &
  pos_obj and neg_obj can probably be cached and updated as data points
  are assigned to modes.
 */
-void em_mode::learn_obj_clauses(const relation_table &rels) const {
+void em_mode::update_obj_clauses() const {
 	if (!obj_clauses_stale) {
 		return;
 	}
 	
+	const relation_table &rels = data.get_all_rels();
 	obj_clauses.resize(sig.size());
 	for (int i = 1; i < sig.size(); ++i) {   // 0 is always target, no need to map
 		string type = sig[i].type;
@@ -217,14 +218,15 @@ void em_mode::learn_obj_clauses(const relation_table &rels) const {
 			interval_set::const_iterator k, kend;
 			for (k = mem.begin(), kend = mem.end(); k != kend; ++k) {
 				const model_train_inst &d = data.get_inst(*k);
-				int o = (*d.sig)[m[i]].id;
-				
-				objs[0] = d.target;
+				const scene_sig &dsig = *d.sig;
+
+				int o = dsig[m[i]].id;
+				objs[0] = dsig[d.target].id;
 				objs[1] = o;
 				pos_obj.add(*k, objs);
-				for (int si = 0, siend = d.sig->size(); si < siend; ++si) {
-					if ((*d.sig)[si].type == type && si != objs[0] && si != o) {
-						objs[1] = si;
+				for (int l = 0, lend = dsig.size(); l < lend; ++l) {
+					if (dsig[l].type == type && l != d.target && l != m[i]) {
+						objs[1] = dsig[l].id;
 						neg_obj.add(*k, objs);
 					}
 				}
@@ -255,22 +257,30 @@ void em_mode::proxy_use_sub(const vector<string> &args, ostream &os) {
 	if (noise) {
 		os << "noise" << endl;
 	} else {
-		os << "coefficients" << endl;
-		table_printer t;
-		int ci = 0;
-		for (int i = 0; i < sig.size(); ++i) {
-			for (int j = 0; j < sig[i].props.size(); ++j) {
-				t.add_row() << ci << sig[i].type << sig[i].props[j] << coefficients(ci++);
+		string func;
+		get_function_string(func);
+		os << "function" << endl << func << endl << endl;
+
+		os << "object maps" << endl;
+		for (int i = 0, iend = obj_maps.size(); i < iend; ++i) {
+			int d = obj_maps[i].members.ith(0);
+			const scene_sig &dsig = *data.get_inst(d).sig;
+			const vector<int> &omap = obj_maps[i].obj_map;
+
+			os << obj_maps[i].members << endl;
+			for (int j = 0, jend = omap.size(); j < jend; ++j) {
+				os << j << " -> " << dsig[omap[j]].name << endl;
 			}
+			os << endl;
 		}
-		t.print(os);
-		os << endl << "intercept " << intercept << endl;
 	}
 }
 
 void em_mode::cli_clauses(ostream &os) const {
 	table_printer t;
-	for (int j = 0; j < obj_clauses.size(); ++j) {
+	update_obj_clauses();
+	t.add_row() << 0 << "target";
+	for (int j = 1; j < obj_clauses.size(); ++j) {
 		t.add_row() << j;
 		if (obj_clauses[j].empty()) {
 			t << "empty";
@@ -564,7 +574,7 @@ void em_mode::get_function_string(string &s) const {
 					ss << c << " * ";
 				}
 			}
-			ss << sig[i].name << ":" << sig[i].props[j];
+			ss << i << ":" << sig[i].type << ":" << sig[i].props[j];
 		}
 	}
 	
