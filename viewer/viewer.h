@@ -77,6 +77,7 @@ typedef struct Layer {
 typedef struct Scene {
 	char *name;
 	geometry *geoms;
+	geometry *focus;
 	struct Scene *next;
 } scene;
 
@@ -115,6 +116,7 @@ void request_screenshot(char *path, int i);  /* 0 = from keyboard, 1 = from inpu
 geometry *find_or_add_geom(scene *s, char *name);
 int delete_geoms(scene *s, char *pattern);
 int match_geoms(scene *s, char *pattern, geometry **geoms, int n);
+geometry *focus_next_geom(scene *s);
 
 int set_layer(int layer_num, char option, int value);
 

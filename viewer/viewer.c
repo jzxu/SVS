@@ -180,6 +180,11 @@ void GLFWCALL keyboard_callback(int key, int state) {
 		case 'O':
 			cam.ortho = 1 - cam.ortho;
 			break;
+		case 'F':
+			if (curr_scene) {
+				focus_next_geom(curr_scene);
+			}
+			break;
 		default:
 			return; /* return without setting redraw */
 	}
@@ -618,6 +623,7 @@ void init_scene(scene *s, char *name) {
 		exit(1);
 	}
 	s->geoms = NULL;
+	s->focus = NULL;
 	s->next = NULL;
 }
 
@@ -639,6 +645,15 @@ void destroy_scene(scene *s) {
 	free(s);
 }
 
+geometry *focus_next_geom(scene *s) {
+	if (s->focus) {
+		s->focus = s->focus->next;
+	} else {
+		s->focus = s->geoms;
+	}
+	return s->focus;
+}
+
 void setup3d() {
 	real aspect;
 	
@@ -654,6 +669,10 @@ void setup3d() {
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 	apply_camera(&cam);
+	if (curr_scene && curr_scene->focus) {
+		real *p = curr_scene->focus->pos;
+		glTranslated(-p[0], -p[1], -p[2]);
+	}
 }
 
 void draw_layer(scene *s, int layer_num) {
