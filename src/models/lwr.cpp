@@ -152,7 +152,6 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 		return true;
 	}
 
-	/*
 	mat coefs;
 	linreg_d(FORWARD, X, Y, w, noise_var, coefs, intercept);
 	//linreg_d(LASSO, X, Y, cvec(), noise_var, coefs, intercept);
@@ -162,12 +161,13 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 	for (int i = 0, iend = coefs.rows(); i < iend; ++i) {
 		lin_coefs(i) = coefs(i, 0);
 	}
-	*/
+	/*
 	double sigma, clen, mean, var;
 	sigma = 1e-4;
 	clen = 10;
 	gpr(X, Y.col(0), x, sigma, clen, mean, var);
 	y(0) = mean;
+	*/
 	return true;
 }
 
