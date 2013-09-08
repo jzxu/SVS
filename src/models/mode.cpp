@@ -318,24 +318,27 @@ void em_mode::unserialize(istream &is) {
 	                 >> coefficients >> intercept >> n_nonzero >> manual >> obj_clauses_stale;
 }
 
+double em_mode::assignment_error(const scene_sig &dsig, const rvec &x, double y, double noise_var, const vector<int> &assign) const {
+	int xlen = sig.dim();
+	rvec xc(xlen);
+	int s = 0;
+	assert(assign.size() == sig.size());
+	for (int i = 0, iend = assign.size(); i < assign.size(); ++i) {
+		const scene_sig::entry &e = dsig[assign[i]];
+		int l = e.props.size();
+		assert(sig[i].props.size() == l);
+		xc.segment(s, l) = x.segment(e.start, l);
+		s += l;
+	}
+	assert(s == xlen);
+	double py = xc.dot(coefficients) + intercept;
+	return fabs(y - py);
+}
+
 double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, double y, double noise_var, vector<int> &best_assign) const {
 	if (noise) {
 		return INF;
 	}
-	
-	/*
-	 Each mode has a signature that specifies the types and orders of
-	 objects it expects for inputs. This is recorded in this->sig.
-	 Call this the mode signature.
-	 
-	 Each data point has a signature that specifies which types and
-	 orders of object properties encoded by the property vector. This
-	 is recorded in dsig. Call this the data signature.
-	 
-	 P(d, m) = MAX[assignment][P(d, m, assignment)] where 'assignment'
-	 is a mapping of objects in the data signature to the objects in
-	 the mode signature.
-	*/
 	
 	best_assign.clear();
 
@@ -344,6 +347,38 @@ double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, dou
 		assert(coefficients.size() == 0);
 		return fabs(y - intercept);
 	}
+	
+	/*
+	 See if any of the existing mappings result in acceptable error
+	*/
+	for (int i = 0, iend = obj_maps.size(); i < iend; ++i) {
+		const vector<int> &m = obj_maps[i].obj_map;
+		/* check if it's legal */
+		if (m[0] != target) {
+			continue;
+		}
+		bool legal = true;
+		for (int j = 0, jend = m.size(); j < jend; ++j) {
+			if (sig[j].type != dsig[m[j]].type) {
+				legal = false;
+				break;
+			}
+		}
+		if (!legal) {
+			continue;
+		}
+		double error = assignment_error(dsig, x, y, noise_var, m);
+		//if (error < NUM_STDEVS_THRESH * sqrt(noise_var)) {
+		if (error < 1e-15) {
+			best_assign = m;
+			return error;
+		}
+	}
+
+	/*
+	 No existing object map results in acceptable error, so now try all possible
+	 assignments.
+	*/
 	
 	/*
 	 Create the input table for the combination generator to generate
@@ -366,22 +401,9 @@ double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, dou
 	 Iterate through all assignments and find the one that gives lowest error
 	*/
 	vector<int> assign;
-	int xlen = sig.dim();
-	rvec xc(xlen);
 	double best_error = INF;
 	while (gen.next(assign)) {
-		int s = 0;
-		for (int i = 0; i < assign.size(); ++i) {
-			const scene_sig::entry &e = dsig[assign[i]];
-			int l = e.props.size();
-			assert(sig[i].props.size() == l);
-			xc.segment(s, l) = x.segment(e.start, l);
-			s += l;
-		}
-		assert(s == xlen);
-		
-		double py = xc.dot(coefficients) + intercept;
-		double error = fabs(y - py);
+		double error = assignment_error(dsig, x, y, noise_var, assign);
 		if (error < best_error) {
 			best_error = error;
 			best_assign = assign;
@@ -497,6 +519,7 @@ void em_mode::del_example(int t) {
 		sorted_ys.erase(make_pair(d.y(0), t));
 	}
 	obj_clauses_stale = true;
+	stale = true;
 }
 
 void em_mode::largest_const_subset(vector<int> &subset) {

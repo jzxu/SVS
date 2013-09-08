@@ -77,6 +77,11 @@ private:
 	rvec coefficients;
 	double intercept;
 	int n_nonzero;
+
+	/*
+	 Each mode has a signature that specifies the type of each object that the
+	 mode function is conditioned on. Call this the mode signature.
+	*/
 	scene_sig sig;
 	
 	/*
@@ -97,6 +102,7 @@ private:
 
 	void update_obj_clauses() const;
 	
+	double assignment_error(const scene_sig &dsig, const rvec &x, double y, double noise_var, const std::vector<int> &assign) const;
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
 	void cli_clauses(std::ostream &os) const;
