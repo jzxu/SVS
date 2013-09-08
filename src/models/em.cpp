@@ -487,6 +487,63 @@ em_mode *EM::add_mode(bool manual) {
 	return new_mode;
 }
 
+void EM::unify(const em_mode *m, const vector<int> &new_ex, int sig, int target, unify_result &result) const {
+	result.success = false;
+	result.num_ex = 0;
+	result.num_uncovered = m->size();
+	result.num_new_covered = 0;
+	result.num_coefs = 0;
+
+	if (!m->unifiable(sig, target)) {
+		return;
+	}
+	const interval_set &curr_ex = m->get_members();
+	int nrows = curr_ex.size() + new_ex.size();
+	int ncols = data.get_inst(curr_ex.ith(0)).x.size();
+	int thresh = curr_ex.size() + .9 * new_ex.size();
+
+	mat X(nrows, ncols), Y(nrows, 1);
+
+	interval_set::const_iterator i, iend;
+	int j = 0;
+	for (i = curr_ex.begin(), iend = curr_ex.end(); i != iend; ++i, ++j) {
+		X.row(j) = data.get_inst(*i).x;
+		Y.row(j) = data.get_inst(*i).y;
+	}
+	for (int k = 0, kend = new_ex.size(); k < kend; ++k, ++j) {
+		X.row(j) = data.get_inst(new_ex[k]).x;
+		Y.row(j) = data.get_inst(new_ex[k]).y;
+	}
+
+	vector<int> unified_ex;
+	mat coefs;
+	rvec intercept;
+	ransac(X, Y, noise_var, thresh, curr_ex.size(), false, unified_ex, coefs, intercept);
+	if (unified_ex.size() < thresh) {
+		return;
+	}
+	
+	result.success = true;
+	result.coefs = coefs.col(0);
+	result.intercept = intercept(0);
+	result.num_ex = unified_ex.size();
+	result.num_uncovered = curr_ex.size();
+	result.num_new_covered = 0;
+	for (int k = 0, kend = unified_ex.size(); k < kend; ++k) {
+		if (unified_ex[k] < curr_ex.size()) {
+			--result.num_uncovered;
+		} else {
+			++result.num_new_covered;
+		}
+	}
+	result.num_coefs = 0;
+	for (int k = 0, kend = result.coefs.size(); k < kend; ++k) {
+		if (result.coefs(k) != 0.0) {
+			++result.num_coefs;
+		}
+	}
+}
+
 bool EM::unify_or_add_mode() {
 	function_timer t(timers.get_or_add("new"));
 
@@ -554,56 +611,25 @@ bool EM::unify_or_add_mode() {
 		 model is just as accurate as the original, then just add the noise to that
 		 model instead of creating a new one.
 		*/
-		mat X, Y, ucoefs;
-		rvec uinter;
-		for (int j = 1, jend = modes.size(); j < jend; ++j) {
-			em_mode &m = *modes[j];
-	
-			if (!m.unifiable(seed_sig, seed_target)) {
-				continue;
-			}
-	
-			vector<int> subset;
-			const interval_set &old = m.get_members();
-			int nrows = old.size() + largest.size();
-			int ncols = data.get_inst(old.ith(0)).x.size();
-			int thresh = old.size() + .9 * largest.size();
-
-			X.resize(nrows, ncols);
-			Y.resize(nrows, 1);
-
-			interval_set::const_iterator oi, oiend;
-			int k = 0;
-			for (oi = old.begin(), oiend = old.end(); oi != oiend; ++oi, ++k) {
-				int i = *oi;
-				X.row(k) = data.get_inst(i).x;
-				Y.row(k) = data.get_inst(i).y;
-			}
-			for (int l = 0, lend = largest.size(); l < lend; ++l, ++k) {
-				X.row(k) = data.get_inst(largest[l]).x;
-				Y.row(k) = data.get_inst(largest[l]).y;
-			}
-
-			loggers->get(LOG_EM) << "Trying to unify with mode " << j << endl;
-			ransac(X, Y, noise_var, thresh, old.size(), false, subset, ucoefs, uinter);
-			if (subset.size() >= thresh) {
-				loggers->get(LOG_EM) << "Successfully unified with mode " << j << endl;
-
-				/* all this up to the assert is just error checking, can get rid of it later */
-				int subset_inst;
-				if (subset[0] < old.size()) {
-					subset_inst = old.ith(subset[0]);
-				} else {
-					subset_inst = largest[subset[0] - old.size()];
+		unify_result best_result;
+		int best_mode = 0;
+		for (int i = 1, iend = modes.size(); i < iend; ++i) {
+			unify_result r;
+			unify(modes[i], largest, seed_sig, seed_target, r);
+			if (r.success) {
+				loggers->get(LOG_EM) << "Successfully unified with mode " << i << endl;
+				if (best_mode == 0 || r.num_coefs < best_result.num_coefs) {
+					best_mode = i;
+					best_result = r;
 				}
-				const model_train_inst &d0 = data.get_inst(subset_inst);
-				assert(seed_sig == d0.sig_index && seed_target == d0.target);
-				/* end error checking */
-				m.set_params(*data.get_sig(seed_sig), seed_target, ucoefs.col(0), uinter(0));
-				return true;
 			}
-			loggers->get(LOG_EM) << "Failed to unify with mode " << j << endl;
 		}
+		if (best_mode > 0) {
+			loggers->get(LOG_EM) << "Unifying with mode " << best_mode << endl;
+			modes[best_mode]->set_params(*data.get_sig(seed_sig), seed_target, best_result.coefs, best_result.intercept);
+			return true;
+		}
+		loggers->get(LOG_EM) << "Failed to unify with any modes" << endl;
 	}
 	
 	em_mode *new_mode = add_mode(false);

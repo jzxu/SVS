@@ -78,10 +78,20 @@ public:
 
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
 private:
+	struct unify_result {
+		bool success;
+		cvec coefs;
+		double intercept;
+		int num_ex;          // num. examples covered, old and new
+		int num_uncovered;   // num. examples covered by old mode and not by new mode
+		int num_new_covered; // num. noise examples covered by new mode
+		int num_coefs;       // num. non-zero coefficients
+	};
+
 	void estep();
 	bool mstep();
 	void fill_xy(const interval_set &rows, mat &X, mat &Y) const;
-
+	void unify(const em_mode *m, const std::vector<int> &new_ex, int sig, int target, unify_result &result) const;
 	bool unify_or_add_mode();
 	em_mode *add_mode(bool manual);
 	bool remove_modes();
