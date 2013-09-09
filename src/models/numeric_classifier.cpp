@@ -59,15 +59,13 @@ private:
 		const mat &data,
 		const std::vector<int> &classes,
 		const std::vector<std::vector<int> > &sorted_dims,
-		const std::vector<bool> &ex_usable,
-		const std::vector<bool> &dim_usable);
+		const std::vector<bool> &ex_usable);
 	
 	void choose_split(
 		const mat &data,
 		const std::vector<int> &classes,
 		const std::vector<std::vector<int> > &sorted_dims,
-		const std::vector<bool> &ex_usable,
-		const std::vector<bool> &dim_usable);
+		const std::vector<bool> &ex_usable);
 
 	void print(std::ostream &os) const;
 
@@ -362,17 +360,13 @@ void dtree_classifier::choose_split(
 	const mat &data,
 	const vector<int> &classes,
 	const vector<vector<int> > &sorted_dims,
-	const vector<bool> &ex_usable,
-	const vector<bool> &dim_usable)
+	const vector<bool> &ex_usable)
 {
 	int n = data.rows();
 	split_dim = -1;
 	split_val = INF;
 	double best_entropy = 0.0;
 	for (int i = 0, iend = sorted_dims.size(); i < iend; ++i) {
-		if (!dim_usable[i])
-			continue;
-		
 		vector<int> left_counts(2), right_counts(2); // 2 classes - 0 and 1
 		int left_total = 0, right_total = 0;
 		for (int j = 0; j < n; ++j) {
@@ -415,10 +409,9 @@ void dtree_classifier::learn_rec(
 	const mat &data,
 	const vector<int> &classes,
 	const vector<vector<int> > &sorted_dims,
-	const vector<bool> &ex_usable,
-	const vector<bool> &dim_usable)
+	const vector<bool> &ex_usable)
 {
-	choose_split(data, classes, sorted_dims, ex_usable, dim_usable);
+	choose_split(data, classes, sorted_dims, ex_usable);
 	if (split_dim < 0) {
 		cls = most_common_class(classes, ex_usable);
 		assert(cls >= 0);
@@ -427,9 +420,7 @@ void dtree_classifier::learn_rec(
 
 	vector<bool> left_ex_usable(ex_usable.begin(), ex_usable.end());
 	vector<bool> right_ex_usable(ex_usable.begin(), ex_usable.end());
-	vector<bool> dim_usable_next(dim_usable.begin(), dim_usable.end());
 
-	dim_usable_next[split_dim] = false;
 	for (int i = 0, iend = data.rows(); i < iend; ++i) {
 		if (data(i, split_dim) <= split_val) {
 			right_ex_usable[i] = false;
@@ -439,8 +430,8 @@ void dtree_classifier::learn_rec(
 	}
 	left = new dtree_classifier(depth+1);
 	right = new dtree_classifier(depth+1);
-	left->learn_rec(data, classes, sorted_dims, left_ex_usable, dim_usable_next);
-	right->learn_rec(data, classes, sorted_dims, right_ex_usable, dim_usable_next);
+	left->learn_rec(data, classes, sorted_dims, left_ex_usable);
+	right->learn_rec(data, classes, sorted_dims, right_ex_usable);
 	assert((cls >= 0 && split_dim < 0) || (cls < 0 && split_dim >= 0));
 }
 
@@ -474,9 +465,8 @@ void dtree_classifier::learn(mat &data, const vector<int> &classes) {
 	}
 
 	vector<bool> ex_usable(data.rows(), true);
-	vector<bool> dim_usable(data.cols(), true);
 
-	learn_rec(data, classes, sorted_dims, ex_usable, dim_usable);
+	learn_rec(data, classes, sorted_dims, ex_usable);
 }
 
 int dtree_classifier::classify(const rvec &x) const {
