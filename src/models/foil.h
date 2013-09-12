@@ -72,6 +72,9 @@ public:
 
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
+
+	void inspect(std::ostream &os) const;
+	void inspect_detailed(std::ostream &os) const;
 };
 
 bool run_FOIL(const relation &pos, const relation &neg, const relation_table &rels, bool prune, bool track_training, logger_set *loggers, FOIL_result &result);

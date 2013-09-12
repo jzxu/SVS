@@ -95,17 +95,17 @@ private:
 	 identifiable with a set of first-order Horn clauses
 	 learned with FOIL.
 	*/
-	mutable std::vector<std::vector<clause> > obj_clauses;
-	mutable bool obj_clauses_stale;
+	mutable std::vector<FOIL_result> obj_classifiers;
+	mutable bool obj_classifiers_stale;
 	
 	logger_set *loggers;
 
-	void update_obj_clauses() const;
+	void update_obj_classifiers() const;
 	
 	double assignment_error(const scene_sig &dsig, const rvec &x, double y, double noise_var, const std::vector<int> &assign) const;
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
-	void cli_clauses(std::ostream &os) const;
+	void cli_clauses(const std::vector<std::string> &args, std::ostream &os) const;
 	void cli_members(std::ostream &os) const;
 	void cli_sig(std::ostream &os) const;
 };

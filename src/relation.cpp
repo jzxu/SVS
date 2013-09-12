@@ -859,6 +859,12 @@ void relation::print_condensed(ostream &os) const {
 	}
 }
 
+void relation::print_first_arg(ostream &os) const {
+	interval_set first;
+	at_pos(0, first);
+	os << first;
+}
+
 ostream &operator<<(ostream &os, const relation &r) {
 	relation::const_iterator i, end;
 	for (i = r.begin(), end = r.end(); i != end; ++i) {

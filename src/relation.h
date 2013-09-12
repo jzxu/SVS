@@ -213,6 +213,7 @@ public:
 	const_iterator end() const { return iter(*this, false); }
 	
 	void print_condensed(std::ostream &os) const;
+	void print_first_arg(std::ostream &os) const;
 
 private:
 	bool check_size() const;

@@ -1064,3 +1064,39 @@ void FOIL_result::unserialize(istream &is) {
 	unserializer(is) >> clauses >> true_negatives >> false_negatives;
 }
 
+void FOIL_result::inspect(ostream &os) const {
+	table_printer t;
+	t.add_row() << "#" << "clause" << "Correct" << "Incorrect";
+	for (int i = 0, iend = clauses.size(); i < iend; ++i) {
+		t.add_row() << i << clauses[i].cl << clauses[i].true_positives.size() << clauses[i].false_positives.size();
+	}
+	t.add_row() << '-' << "NEGATIVE" << true_negatives.size() << false_negatives.size();
+	t.print(os);
+}
+
+void FOIL_result::inspect_detailed(ostream &os) const {
+	if (clauses.empty()) {
+		os << "No clauses" << endl;
+	} else {
+		for (int i = 0; i < clauses.size(); ++i) {
+			os << "CLAUSE: " << clauses[i].cl << endl;
+			
+			os << "True positives: " << endl;
+			clauses[i].true_positives.print_condensed(os);
+			os << endl;
+			
+			os << "False positives: ";
+			clauses[i].false_positives.print_first_arg(os);
+			os << endl << endl << endl;
+		}
+	}
+	os << "NEGATIVE:" << endl;
+	
+	os << "True negatives: ";
+	true_negatives.print_first_arg(os);
+	os << endl << endl;
+	
+	os << "False negatives: ";
+	false_negatives.print_first_arg(os);
+}
+

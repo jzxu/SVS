@@ -6,12 +6,6 @@
 
 using namespace std;
 
-void print_first_arg(const relation &r, ostream &os) {
-	interval_set first;
-	r.at_pos(0, first);
-	os << first;
-}
-
 void extract_vec(const int_tuple &t, const rvec &x, const scene_sig &sig, rvec &out) {
 	vec3 target_pos;
 	out.resize(x.size());
@@ -215,7 +209,7 @@ void binary_classifier::inspect_detailed(ostream &os) const {
 			os << endl << endl;
 			
 			os << "False positives: ";
-			print_first_arg(clauses[k].false_pos, os);
+			clauses[k].false_pos.print_first_arg(os);
 			os << endl << endl;
 			
 			if (clauses[k].nc) {
@@ -228,11 +222,11 @@ void binary_classifier::inspect_detailed(ostream &os) const {
 	os << "NEGATIVE:" << endl;
 	
 	os << "True negatives: ";
-	print_first_arg(true_negatives, os);
+	true_negatives.print_first_arg(os);
 	os << endl << endl;
 	
 	os << "False negatives: ";
-	print_first_arg(false_negatives, os);
+	false_negatives.print_first_arg(os);
 	os << endl << endl;
 	
 	if (neg_nc) {

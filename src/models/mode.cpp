@@ -156,7 +156,7 @@ bool em_mode::map_objs(int target, const scene_sig &dsig, const relation_table &
 	mapping.resize(sig.empty() ? 1 : sig.size(), -1);
 	mapping[0] = target;  // target always maps to target
 	
-	update_obj_clauses();
+	update_obj_classifiers();
 	
 	var_domains domains;
 	// 0 = time, 1 = target, 2 = object we're searching for
@@ -173,12 +173,12 @@ bool em_mode::map_objs(int target, const scene_sig &dsig, const relation_table &
 		}
 		if (d.empty()) {
 			return false;
-		} else if (d.size() == 1 || obj_clauses[i].empty()) {
+		} else if (d.size() == 1 || obj_classifiers[i].clauses.empty()) {
 			mapping[i] = dsig.find_id(*d.begin());
 		} else {
 			bool found = false;
-			for (int j = 0, jend = obj_clauses[i].size(); j < jend; ++j) {
-				CSP csp(obj_clauses[i][j], rels);
+			for (int j = 0, jend = obj_classifiers[i].clauses.size(); j < jend; ++j) {
+				CSP csp(obj_classifiers[i].clauses[j].cl, rels);
 				if (csp.solve(domains)) {
 					assert(d.size() == 1);
 					mapping[i] = dsig.find_id(*d.begin());
@@ -199,13 +199,13 @@ bool em_mode::map_objs(int target, const scene_sig &dsig, const relation_table &
  pos_obj and neg_obj can probably be cached and updated as data points
  are assigned to modes.
 */
-void em_mode::update_obj_clauses() const {
-	if (!obj_clauses_stale) {
+void em_mode::update_obj_classifiers() const {
+	if (!obj_classifiers_stale) {
 		return;
 	}
 	
 	const relation_table &rels = data.get_all_rels();
-	obj_clauses.resize(sig.size());
+	obj_classifiers.resize(sig.size());
 	for (int i = 1; i < sig.size(); ++i) {   // 0 is always target, no need to map
 		string type = sig[i].type;
 		relation pos_obj(3), neg_obj(3);
@@ -233,17 +233,12 @@ void em_mode::update_obj_clauses() const {
 			}
 		}
 		
-		FOIL_result fr;
-		if (!run_FOIL(pos_obj, neg_obj, rels, true, true, loggers, fr)) {
+		if (!run_FOIL(pos_obj, neg_obj, rels, true, true, loggers, obj_classifiers[i])) {
 			// respond to this situation appropriately
 			cerr << "FOIL failed for object " << i << endl;
 		}
-		obj_clauses[i].resize(fr.clauses.size());
-		for (int j = 0, jend = fr.clauses.size(); j < jend; ++j) {
-			obj_clauses[i][j] = fr.clauses[j].cl;
-		}
 	}
-	obj_clauses_stale = false;
+	obj_classifiers_stale = false;
 }
 
 void em_mode::proxy_get_children(map<string, cliproxy*> &c) {
@@ -275,24 +270,24 @@ void em_mode::proxy_use_sub(const vector<string> &args, ostream &os) {
 	}
 }
 
-void em_mode::cli_clauses(ostream &os) const {
-	table_printer t;
-	update_obj_clauses();
-	t.add_row() << 0 << "target";
-	for (int j = 1; j < obj_clauses.size(); ++j) {
-		t.add_row() << j;
-		if (obj_clauses[j].empty()) {
-			t << "empty";
-		} else {
-			for (int k = 0; k < obj_clauses[j].size(); ++k) {
-				if (k > 0) {
-					t.add_row().skip(1);
-				}
-				t << obj_clauses[j][k];
-			}
+void em_mode::cli_clauses(const vector<string> &args, ostream &os) const {
+	update_obj_classifiers();
+	
+	if (!args.empty()) {
+		int i;
+		if (!parse_int(args[0], i) || i < 0 || i >= obj_classifiers.size()) {
+			os << "specify valid object (1 - " << obj_classifiers.size() - 1 << ")" << endl;
+			return;
+		}
+		obj_classifiers[i].inspect_detailed(os);
+		os << endl;
+	} else {
+		for (int i = 1, iend = obj_classifiers.size(); i < iend; ++i) {
+			os << "OBJECT " << i << endl;
+			obj_classifiers[i].inspect(os);
+			os << endl << endl;
 		}
 	}
-	t.print(os);
 }
 
 void em_mode::cli_members(ostream &os) const {
@@ -308,13 +303,13 @@ void em_mode::cli_sig(ostream &os) const {
  therefore not (un)serialized.
 */
 void em_mode::serialize(ostream &os) const {
-	serializer(os) << stale << new_fit << members << obj_maps << sig << obj_clauses << sorted_ys
-	               << coefficients << intercept << n_nonzero << manual << obj_clauses_stale;
+	serializer(os) << stale << new_fit << members << obj_maps << sig << obj_classifiers << sorted_ys
+	               << coefficients << intercept << n_nonzero << manual << obj_classifiers_stale;
 }
 
 void em_mode::unserialize(istream &is) {
-	unserializer(is) >> stale >> new_fit >> members >> obj_maps >> sig >> obj_clauses >> sorted_ys
-	                 >> coefficients >> intercept >> n_nonzero >> manual >> obj_clauses_stale;
+	unserializer(is) >> stale >> new_fit >> members >> obj_maps >> sig >> obj_classifiers >> sorted_ys
+	                 >> coefficients >> intercept >> n_nonzero >> manual >> obj_classifiers_stale;
 }
 
 double em_mode::assignment_error(const scene_sig &dsig, const rvec &x, double y, double noise_var, const vector<int> &assign) const {
@@ -504,7 +499,7 @@ void em_mode::add_example(int t, const vector<int> &ex_obj_map, double noise_var
 			stale = true;
 		}
 	}
-	obj_clauses_stale = true;
+	obj_classifiers_stale = true;
 }
 
 void em_mode::del_example(int t) {
@@ -517,7 +512,7 @@ void em_mode::del_example(int t) {
 	if (noise) {
 		sorted_ys.erase(make_pair(d.y(0), t));
 	}
-	obj_clauses_stale = true;
+	obj_classifiers_stale = true;
 	stale = true;
 }
 
