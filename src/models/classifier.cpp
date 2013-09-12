@@ -325,19 +325,17 @@ void binary_classifier::update(const relation &mem_i, const relation &mem_j, con
 	}
 	
 	if (use_foil && !mem_i.empty() && !mem_j.empty()) {
-		FOIL foil(loggers);
-		foil.set_problem(mem_i, mem_j, rels);
-		foil.learn(prune, true);
-
-		clauses.resize(foil.num_clauses());
-		for (int k = 0, kend = foil.num_clauses(); k < kend; ++k) {
-			clauses[k].cl = foil.get_clause(k);
-			clauses[k].false_pos = foil.get_false_positives(k);
-			clauses[k].true_pos = foil.get_true_positives(k);
+		FOIL_result fr;
+		run_FOIL(mem_i, mem_j, rels, prune, true, loggers, fr);
+		clauses.resize(fr.clauses.size());
+		for (int k = 0, kend = fr.clauses.size(); k < kend; ++k) {
+			clauses[k].cl = fr.clauses[k].cl;
+			clauses[k].false_pos = fr.clauses[k].false_positives;
+			clauses[k].true_pos = fr.clauses[k].true_positives;
 			clauses[k].success_rate = clauses[k].true_pos.size() / static_cast<double>(clauses[k].true_pos.size() + clauses[k].false_pos.size());
 		}
-		false_negatives = foil.get_false_negatives();
-		true_negatives = foil.get_true_negatives();
+		false_negatives = fr.false_negatives;
+		true_negatives = fr.true_negatives;
 		neg_success_rate = true_negatives.size() / static_cast<double>(true_negatives.size() + false_negatives.size());
 	} else {
 		/*
@@ -438,7 +436,6 @@ void classifier::proxy_get_children(map<string, cliproxy*> &c) {
 	c["use_pruning"] = new bool_proxy(&prune, "Prune FOIL clauses.");
 	c["use_context"] = new bool_proxy(&context, "Consider only closest objects in classification.");
 	c["nc_type"]     = new memfunc_proxy<classifier>(this, &classifier::cli_nc_type);
-	c["dump_foil6"]  = new memfunc_proxy<classifier>(this, &classifier::cli_dump_foil6);
 }
 
 void classifier::cli_nc_type(const vector<string> &args, ostream &os) {
@@ -691,30 +688,6 @@ void classifier::proxy_use_sub(const vector<string> &args, ostream &os) {
 		os << "Negated" << endl;
 	}
 	p->clsfr->inspect_detailed(os);
-}
-
-void classifier::cli_dump_foil6(const vector<string> &args, ostream &os) const {
-	int m1, m2;
-	if (args.size() != 2 || 
-	    !parse_int(args[0], m1) || 
-	    !parse_int(args[1], m2) ||
-	    m1 < 0 || m1 >= classes.size() || m2 < 0 || m2 >= classes.size() || m1 == m2) 
-	{
-		os << "Specify 2 modes" << endl;
-		return;
-	}
-	
-	if (m1 > m2) {
-		swap(m1, m2);
-	}
-	
-	FOIL foil(loggers);
-	if (context) {
-		foil.set_problem(classes[m1]->mem_rel, classes[m2]->mem_rel, data.get_context_rels());
-	} else {
-		foil.set_problem(classes[m1]->mem_rel, classes[m2]->mem_rel, data.get_all_rels());
-	}
-	foil.dump_foil6(os);
 }
 
 void classifier::serialize(ostream &os) const {

@@ -54,53 +54,28 @@ typedef std::vector<literal> clause;
 
 std::ostream &operator<<(std::ostream &os, const clause &c);
 
-class FOIL {
+class FOIL_result_clause : public serializable {
 public:
-	FOIL(logger_set *loggers);
-	~FOIL();
-	void set_problem(const relation &pos, const relation &neg, const relation_table &rels);
-	bool learn(bool prune, bool track_training);
-	void gain(const literal &l, double &g, double &maxg) const;
-	void dump_foil6(std::ostream &os) const;
-	bool load_foil6(std::istream &is);
+	clause cl;
+	relation true_positives;
+	relation false_positives;
 
-	const relation_table &get_relations() const { return *rels; }
-	const relation &get_pos() const { return pos; }
-	const relation &get_neg() const { return neg; }
-	const relation &get_rel(const std::string &name) const;
-	
-	const int num_clauses() const { return clauses.size(); }
-	const clause &get_clause(int i) const { return clauses[i].cl; }
-	const relation &get_false_positives(int i) const { return clauses[i].false_positives; }
-	const relation &get_true_positives(int i) const { return clauses[i].true_positives; }
-	const relation &get_false_negatives() const { return false_negatives; }
-	const relation &get_true_negatives() const { return true_negatives; }
-	
-	double get_success_rate() const;
-
-private:
-	double choose_literal(literal &l, int nvars);
-	bool choose_clause(clause &c, relation *neg_left);
-
-private:
-	struct clause_info {
-		clause cl;
-		relation true_positives;
-		relation false_positives;
-	};
-	
-	relation pos, neg, pos_grow, neg_grow;
-	relation_table const *rels;
-	bool own_rels;
-	int train_dim;
-	
-	std::vector<clause_info> clauses;
-	
-	relation false_negatives;
-	relation true_negatives;
-	
-	logger_set *loggers;
+	void serialize(std::ostream &os) const;
+	void unserialize(std::istream &is);
 };
+
+class FOIL_result : public serializable {
+public:
+	std::vector<FOIL_result_clause> clauses;
+	relation true_negatives;
+	relation false_negatives;
+
+	void serialize(std::ostream &os) const;
+	void unserialize(std::istream &is);
+};
+
+bool run_FOIL(const relation &pos, const relation &neg, const relation_table &rels, bool prune, bool track_training, logger_set *loggers, FOIL_result &result);
+double FOIL_success_rate(const FOIL_result &result);
 
 class CSP_node;
 typedef std::map<int, std::set<int> > var_domains;

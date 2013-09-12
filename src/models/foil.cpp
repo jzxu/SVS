@@ -301,6 +301,34 @@ bool CSP::solve(int_tuple &domains) const {
 	return false;
 }
 
+class FOIL {
+public:
+	FOIL(logger_set *loggers);
+	~FOIL();
+	void set_problem(const relation &pos, const relation &neg, const relation_table &rels);
+	bool learn(bool prune, bool track_training, FOIL_result &result);
+	void dump_foil6(std::ostream &os) const;
+	bool load_foil6(std::istream &is);
+
+	void gain(const literal &l, double &g, double &maxg) const;
+	const relation_table &get_relations() const { return *rels; }
+	const relation &get_pos() const { return pos; }
+	const relation &get_neg() const { return neg; }
+	const relation &get_rel(const std::string &name) const;
+	
+private:
+	double choose_literal(literal &l, int nvars);
+	bool choose_clause(clause &c, relation *neg_left);
+
+private:
+	relation pos, neg, pos_grow, neg_grow;
+	relation_table const *rels;
+	bool own_rels;
+	int train_dim;
+	
+	logger_set *loggers;
+};
+
 /*
  A search tree structure used in FOIL::choose_literal
 */
@@ -523,6 +551,7 @@ int literal::operator<<(const std::string &s) {
 	return c + 1;
 }
 
+
 FOIL::FOIL(logger_set *loggers) 
 : rels(NULL), own_rels(false), loggers(loggers)
 {}
@@ -545,14 +574,14 @@ void FOIL::set_problem(const relation &p, const relation &n, const relation_tabl
 /*
  Returns true if all training examples were correctly classified, false if not
 */
-bool FOIL::learn(bool prune, bool record_errors) {
+bool FOIL::learn(bool prune, bool record_errors, FOIL_result &result) {
 	relation pos_test, neg_test, pos_left;
 	bool dead;
 	
 	if (neg.empty()) {
 		return true;
 	}
-	clauses.clear();
+	result.clauses.clear();
 	int_tuple t;
 	t.push_back(0);
 	pos_left = pos;
@@ -561,45 +590,45 @@ bool FOIL::learn(bool prune, bool record_errors) {
 		split_training(FOIL_GROW_RATIO, pos_left, pos_grow, pos_test);
 		split_training(FOIL_GROW_RATIO, neg, neg_grow, neg_test);
 		
-		clause_info &ci = grow_vec(clauses);
+		FOIL_result_clause &rc = grow_vec(result.clauses);
 		relation *false_pos = NULL;
 		dead = true;
 		
 		if (record_errors) {
-			choose_clause(ci.cl, &ci.false_positives); // false_positives only contains examples from neg_grow, add from neg_test later
+			choose_clause(rc.cl, &rc.false_positives); // false_positives only contains examples from neg_grow, add from neg_test later
 		} else {
-			choose_clause(ci.cl, NULL);
+			choose_clause(rc.cl, NULL);
 		}
 		
 		int fp, tp;
 		double fp_rate;
 		if (prune) {
-			fp = prune_clause(ci.cl, neg_test, *rels, loggers);
+			fp = prune_clause(rc.cl, neg_test, *rels, loggers);
 		} else {
-			fp = test_clause_n(ci.cl, true, neg_test, *rels, NULL);
+			fp = test_clause_n(rc.cl, true, neg_test, *rels, NULL);
 		}
-		tp = test_clause_n(ci.cl, true, pos_test, *rels, NULL);
+		tp = test_clause_n(rc.cl, true, pos_test, *rels, NULL);
 		fp_rate = fp / static_cast<double>(tp + fp);
-		if (!ci.cl.empty() && fp_rate < MAX_CLAUSE_FP_RATE) {
+		if (!rc.cl.empty() && fp_rate < MAX_CLAUSE_FP_RATE) {
 			vector<int> vars;
-			clause_vars(ci.cl, vars);
-			if (ci.true_positives.arity() == 0) {
-				ci.true_positives.reset(vars.back() + 1);
+			clause_vars(rc.cl, vars);
+			if (rc.true_positives.arity() == 0) {
+				rc.true_positives.reset(vars.back() + 1);
 			}
-			if (ci.false_positives.arity() == 0) {
-				ci.false_positives.reset(vars.back() + 1);
+			if (rc.false_positives.arity() == 0) {
+				rc.false_positives.reset(vars.back() + 1);
 			}
 			
 			// this repeats computation, make more efficient
 			relation covered_pos(train_dim);
 			relation::const_iterator i, iend;
-			CSP csp(ci.cl, *rels);
+			CSP csp(rc.cl, *rels);
 			for (i = pos_left.begin(), iend = pos_left.end(); i != iend; ++i) {
 				int_tuple t = *i;
 				if (csp.solve(t)) {
 					covered_pos.add(*i);
 					if (record_errors) {
-						ci.true_positives.add(t);
+						rc.true_positives.add(t);
 					}
 				}
 			}
@@ -607,7 +636,7 @@ bool FOIL::learn(bool prune, bool record_errors) {
 				for (i = neg_test.begin(), iend = neg_test.end(); i != iend; ++i) {
 					int_tuple t = *i;
 					if (csp.solve(t)) {
-						ci.false_positives.add(t);
+						rc.false_positives.add(t);
 					}
 				}
 			}
@@ -620,17 +649,17 @@ bool FOIL::learn(bool prune, bool record_errors) {
 			 Something's wrong here. If the clause is discarded, the positive and
 			 negative examples it covered should be returned back to the grow set.
 			*/
-			clauses.pop_back();
+			result.clauses.pop_back();
 		}
 	}
 	
 	if (record_errors) {
-		false_negatives = pos_left;
-		true_negatives = neg;
-		for (int i = 0, iend = clauses.size(); i < iend; ++i) {
+		result.false_negatives = pos_left;
+		result.true_negatives = neg;
+		for (int i = 0, iend = result.clauses.size(); i < iend; ++i) {
 			relation fp(train_dim);
-			clauses[i].false_positives.slice(train_dim, fp);
-			true_negatives.subtract(fp);
+			result.clauses[i].false_positives.slice(train_dim, fp);
+			result.true_negatives.subtract(fp);
 		}
 	}
 	return !dead;
@@ -889,14 +918,21 @@ bool FOIL::load_foil6(istream &is) {
 	return true;
 }
 
-double FOIL::get_success_rate() const {
+bool run_FOIL(const relation &pos, const relation &neg, const relation_table &rels, bool prune, bool track_training, logger_set *loggers, FOIL_result &result)
+{
+	FOIL foil(loggers);
+	foil.set_problem(pos, neg, rels);
+	return foil.learn(prune, track_training, result);
+}
+
+double FOIL_success_rate(const FOIL_result &result) {
 	int num_right = 0, num_wrong = 0;
-	for (int i = 0, iend = clauses.size(); i < iend; ++i) {
-		num_right += clauses[i].true_positives.size();
-		num_wrong += clauses[i].false_positives.size();
+	for (int i = 0, iend = result.clauses.size(); i < iend; ++i) {
+		num_right += result.clauses[i].true_positives.size();
+		num_wrong += result.clauses[i].false_positives.size();
 	}
-	num_right += true_negatives.size();
-	num_wrong += false_negatives.size();
+	num_right += result.true_negatives.size();
+	num_wrong += result.false_negatives.size();
 	return num_right / static_cast<double>(num_right + num_wrong);
 }
 
@@ -1009,5 +1045,22 @@ void literal_tree::expand_df() {
 	for (int i = 0; i < children.size(); ++i) {
 		children[i]->expand_df();
 	}
+}
+
+
+void FOIL_result_clause::serialize(ostream &os) const {
+	serializer(os) << cl << true_positives << false_positives;
+}
+
+void FOIL_result_clause::unserialize(istream &is) {
+	unserializer(is) >> cl >> true_positives >> false_positives;
+}
+
+void FOIL_result::serialize(ostream &os) const {
+	serializer(os) << clauses << true_negatives << false_negatives;
+}
+
+void FOIL_result::unserialize(istream &is) {
+	unserializer(is) >> clauses >> true_negatives >> false_negatives;
 }
 

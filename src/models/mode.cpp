@@ -233,15 +233,14 @@ void em_mode::update_obj_clauses() const {
 			}
 		}
 		
-		FOIL foil(loggers);
-		foil.set_problem(pos_obj, neg_obj, rels);
-		if (!foil.learn(true, false)) {
+		FOIL_result fr;
+		if (!run_FOIL(pos_obj, neg_obj, rels, true, true, loggers, fr)) {
 			// respond to this situation appropriately
-			FATAL("FOIL failed");
+			cerr << "FOIL failed for object " << i << endl;
 		}
-		obj_clauses[i].resize(foil.num_clauses());
-		for (int j = 0, jend = foil.num_clauses(); j < jend; ++j) {
-			obj_clauses[i][j] = foil.get_clause(j);
+		obj_clauses[i].resize(fr.clauses.size());
+		for (int j = 0, jend = fr.clauses.size(); j < jend; ++j) {
+			obj_clauses[i][j] = fr.clauses[j].cl;
 		}
 	}
 	obj_clauses_stale = false;
