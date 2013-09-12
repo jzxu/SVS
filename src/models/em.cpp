@@ -129,20 +129,6 @@ void erase_inds(vector<int> &v, const vector<int> &inds) {
 	v.resize(j);
 }
 
-int ransac_iters(int ninliers, int mss_size, int ndata) {
-	double q = pow(ninliers / static_cast<double>(ndata), mss_size);
-	double lq = log(1 - q);
-	if (lq == 0) {
-		return RANSAC_MAX_ITERS;
-	}
-	double i1 = RANSAC_LOG_ALARM_RATE / lq + 1.0;  // don't cast here to avoid overflow
-	assert(i1 >= 0.0);
-	if (i1 > RANSAC_MAX_ITERS) {
-		return RANSAC_MAX_ITERS;
-	}
-	return static_cast<int>(floor(i1));
-}
-
 /*
  Check if any examples (rows) in X and Y are causing spurious regressors to be
  included in the linear function that describes the data, as defined by coefs.
@@ -182,8 +168,6 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 		assert(holdout_size < X.rows());
 	}
 	holdin_size = X.rows() - holdout_size;
-	Xin.resize(holdin_size, X.cols());
-	Yin.resize(holdin_size, Y.cols());
 	holdout_start = 0;
 	while (holdout_start < X.rows()) {
 		/*
@@ -195,6 +179,8 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 		}
 		int top_size = holdout_start;
 		int bottom_size = holdin_size - top_size;
+		Xin.resize(holdin_size, X.cols());
+		Yin.resize(holdin_size, Y.cols());
 		Xin.topRows(top_size) = X.topRows(top_size);
 		Yin.topRows(top_size) = Y.topRows(top_size);
 		Xin.bottomRows(bottom_size) = X.bottomRows(bottom_size);
@@ -219,6 +205,65 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 	return false;
 }
 
+int ransac_iters(int ninliers, int mss_size, int ndata) {
+	double q = pow(ninliers / static_cast<double>(ndata), mss_size);
+	double lq = log(1 - q);
+	if (lq == 0) {
+		return RANSAC_MAX_ITERS;
+	}
+	double i1 = RANSAC_LOG_ALARM_RATE / lq + 1.0;  // don't cast here to avoid overflow
+	assert(i1 >= 0.0);
+	if (i1 > RANSAC_MAX_ITERS) {
+		return RANSAC_MAX_ITERS;
+	}
+	return static_cast<int>(floor(i1));
+}
+
+/*
+ Gets a random sample that tries to have at least two different values for each
+ dimension in diff_cols.
+
+ Each element of diff_cols that does get two distinct values will be set to -1
+ upon return
+*/
+int ransac_sample(const_mat_view X, const_mat_view Y, const vector<int> &diff_cols, int n, int offset, vector<int> &out) {
+	int nrows = X.rows(), ncols = X.cols(), nout = 0;
+	vector<bool> used(nrows);
+	vector<int> candidates;
+
+	for (int i = 0, iend = diff_cols.size(); i < iend && nout < n; ++i) {
+		if (diff_cols[i] < 0)
+			continue;
+
+		int c = diff_cols[i];
+		double x = (nout == 0 ? NAN : X(out.back() - offset, c));
+		candidates.clear();
+		for (int j = 0; j < nrows; ++j) {
+			if (!used[j] && X(j, c) != x) {
+				candidates.push_back(j);
+			}
+		}
+		if (!candidates.empty()) {
+			int r = candidates[rand() % candidates.size()];
+			out.push_back(offset + r);
+			used[r] = true;
+			++nout;
+		}
+	}
+	if (nout < n) {
+		candidates.clear();
+		for (int i = 0; i < nrows; ++i) {
+			if (!used[i]) {
+				candidates.push_back(offset + i);
+			}
+		}
+		int n1 = min(n - nout, static_cast<int>(candidates.size()));
+		sample(n1, candidates, out);
+		nout += n1;
+	}
+	return nout;
+}
+
 /*
  Added the check_spurious parameter to allow only checking for spurious
  regressors when looking for linear relationships in noise data, but not during
@@ -231,16 +276,24 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int split, bool check_spurious,
             vector<int> &subset, mat &coefs, rvec &intercept)
 {
-	vector<int> mss, fit_set;
+	vector<int> mss, fit_set, nonuniform_cols;
 	mat Xmss, Ymss, Yp, C;
 	cvec dummy, error;
 	rvec inter;
 	
-	int ndata = X.rows();
-	int mss_size = 6;
+	int ndata = X.rows(), ncols = X.cols();
+	int mss_size;
 	int iters;
 	double error_thresh = sqrt(noise_var) * NUM_STDEVS_THRESH;
 	
+	/* Find non-uniform columns */
+	for (int i = 0, iend = X.cols(); i < iend; ++i) {
+		if (!uniform(X.col(i))) {
+			nonuniform_cols.push_back(i);
+		}
+	}
+
+	mss_size = nonuniform_cols.size();
 	if (ndata <= mss_size) {
 		split = 0;
 		iters = 1;
@@ -255,23 +308,28 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 	for (int i = 0; i < iters; ++i) {
 		mss.clear();
 		if (split == 0) {
-			sample(mss_size, 0, ndata, mss);
+			ransac_sample(X, Y, nonuniform_cols, mss_size, 0, mss);
 		} else {
 			// try to sample from the two sides of the split as evenly as possible
 			int n1 = split, n2 = ndata - split;
-			if (n1 < mss_size / 2.0) {
+			int m1 = mss_size / 2;
+			int m2 = mss_size - m1;
+
+			const_mat_view X1(X.block(0, 0, n1, ncols)), X2(X.block(split, 0, n2, ncols));
+			const_mat_view Y1(Y.block(0, 0, n1, 1)), Y2(Y.block(split, 0, n2, 1));
+			if (n1 < m1) {
 				for (int j = 0; j < n1; ++j) {
 					mss.push_back(j);
 				}
-				sample(mss_size - n1, split, ndata, mss);
-			} else if (n2 < mss_size / 2.0) {
+				ransac_sample(X2, Y2, nonuniform_cols, mss_size - n1, split, mss);
+			} else if (n2 < m2) {
 				for (int j = split; j < ndata; ++j) {
 					mss.push_back(j);
 				}
-				sample(mss_size - n2, 0, split, mss);
+				ransac_sample(X1, Y1, nonuniform_cols, mss_size - n2, 0, mss);
 			} else {
-				sample(floor(mss_size / 2.0), 0, split, mss);
-				sample(ceil(mss_size / 2.0), split, ndata, mss);
+				ransac_sample(X1, Y1, nonuniform_cols, m1, 0, mss);
+				ransac_sample(X2, Y2, nonuniform_cols, m2, split, mss);
 			}
 		}
 		
