@@ -6,6 +6,31 @@
 
 using namespace std;
 
+/*
+ Returns the percentage of the segment [a1, a2] that is overlapped by the
+ segment [b1,b2]. This diagram shows the rationale of the calculation:
+
+ a1                      a2
+  |                      |
+   <-ld->|        |<-rd->
+         b1      b2
+*/
+double overlap_ratio(double a1, double a2, double b1, double b2) {
+	double ld = max(0.0, b1 - a1);
+	double rd = max(0.0, a2 - b2);
+	double o = a2 - a1 - ld - rd;
+	return o / (a2 - a1);
+}
+
+/*
+ Conditions for T to be on top of B:
+ - T and B must intersect
+ - the bottom of T (z-axis) must be "close to" the top of B
+ - B must significantly overlap T in the x and y axes.
+
+ This definition is based on bounding boxes so is inherently flawed. But it
+ works well enough for now.
+*/
 bool ontop(const sgnode *tn, const sgnode *bn) {
 	vec3 tmin, tmax, bmin, bmax;
 	
@@ -16,7 +41,17 @@ bool ontop(const sgnode *tn, const sgnode *bn) {
 	bb.get_vals(bmin, bmax);
 	double h1 = tmax(2) - tmin(2), h2 = bmax(2) - bmin(2);
 	double margin = min(h1, h2) * .05;
-	return intersects(tn, bn) && tmin[2] >= bmax[2] - margin;
+	if (tmin[2] < bmax[2] - margin) {
+		// too far inside
+		return false;
+	}
+	
+	if (overlap_ratio(tmin(0), tmax(0), bmin(0), bmax(0)) < 0.1 ||
+	    overlap_ratio(tmin(1), tmax(1), bmin(1), bmax(1)) < 0.1)
+	{
+		return false;
+	}
+	return intersects(tn, bn);
 }
 
 bool standalone(const scene *scn, const vector<const sgnode*> &args) {
