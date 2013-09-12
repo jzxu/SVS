@@ -292,42 +292,35 @@ void fix_for_wols(mat &X, mat &Y, const cvec &w) {
 }
 
 /*
- Perform linear regression. Assumes that input X and Y are already
- cleaned and centered.
+ Expand the coefficents vector so it can be used with the original design
+ matrix.
 */
-bool linreg_clean(regression_type t, const_mat_view X, const_mat_view Y, double var, mat &coefs) {
-	switch (t) {
-		case OLS:
-			return solve(X, Y, coefs);
-		case RIDGE:
-			return ridge(X, Y, coefs);
-		case LASSO:
-			return lasso(X, Y, coefs);
-		case FORWARD:
-			return fstep(X, Y, var, coefs);
-		default:
-			FATAL("unknown regression type");
+void expand_lr_coefs(mat &coefs, int newsize, const vector<int> &positions) {
+	mat coefs1 = coefs;
+	coefs.resize(newsize, coefs.cols());
+	coefs.setConstant(0.0);
+	for (int i = 0, iend = positions.size(); i < iend; ++i) {
+		coefs.row(positions[i]) = coefs1.row(i);
 	}
-	return false;
 }
 
-
 /*
- Clean up input data to avoid instability, then perform some form of
- regression.
- 
- Note that this function modifies inputs X and Y to avoid redundant
+ Perform linear regression. Note that this function modifies inputs X and Y to avoid redundant
  copies.
+
+ If cleaned is false, then preprocess the data by calling clean_lr_data first.
 */
-bool linreg_d(regression_type t, mat &X, mat &Y, const cvec &w, double var, mat &coefs, rvec &inter) {
-	int ndata = X.rows();
-	int xdim = X.cols();
-	int ydim = Y.cols();
+bool linreg(regression_type t, mat &X, mat &Y, const cvec &w, double var, bool cleaned, mat &coefs, rvec &inter) {
+	bool augment, success;
+	rvec Xm, Ym;
 	mat coefs1;
-	rvec Xm, Ym, inter1;
-	vector<int> used;
+	vector<int> used_cols;
+	int xcols = X.cols();
 	
-	clean_lr_data(X, used);
+	if (!cleaned) {
+		clean_lr_data(X, used_cols);
+	}
+	
 	/*
 	 The two ways to deal with intercepts:
 	 
@@ -339,8 +332,7 @@ bool linreg_d(regression_type t, mat &X, mat &Y, const cvec &w, double var, mat 
 	 Unfortunately from what I can gather, method 1 doesn't work with weighted
 	 regression, and method 2 doesn't work with ridge regression.
 	*/
-	
-	bool augment = (w.size() > 0);
+	augment = (w.size() > 0);
 	if (augment) {
 		assert(t != RIDGE);
 		fix_for_wols(X, Y, w);
@@ -348,43 +340,46 @@ bool linreg_d(regression_type t, mat &X, mat &Y, const cvec &w, double var, mat 
 		center_data(X, Xm);
 		center_data(Y, Ym);
 	}
-	
-	if (!linreg_clean(t, X, Y, var, coefs1)) {
+
+	switch (t) {
+		case OLS:
+			success = solve(X, Y, coefs);
+			break;
+		case RIDGE:
+			success = ridge(X, Y, coefs);
+			break;
+		case LASSO:
+			success = lasso(X, Y, coefs);
+			break;
+		case FORWARD:
+			success = fstep(X, Y, var, coefs);
+			break;
+		default:
+			FATAL("unknown regression type");
+	}
+	if (!success) {
 		return false;
 	}
-	
+
 	if (augment) {
-		assert(coefs1.rows() == used.size() + 1);
-		inter = coefs1.row(coefs1.rows() - 1);
+		assert(coefs.rows() == X.cols() + 1);
+		inter = coefs.row(coefs.rows() - 1);
+		coefs.conservativeResize(coefs.rows()-1, coefs.cols());
 	} else {
-		inter = Ym - (Xm * coefs1);
-		double intercept_thresh = 0.01 * sqrt(var);
-		for (int i = 0, iend = inter.size(); i < iend; ++i) {
-			if (fabs(inter(i)) < intercept_thresh) {
-				inter(i) = 0.0;
-			}
+		inter = Ym - (Xm * coefs);
+	}
+
+	double intercept_thresh = 0.01 * sqrt(var);
+	for (int i = 0, iend = inter.size(); i < iend; ++i) {
+		if (fabs(inter(i)) < intercept_thresh) {
+			inter(i) = 0.0;
 		}
 	}
-	
-	coefs.resize(xdim, ydim);
-	coefs.setConstant(0.0);
-	for (int i = 0; i < used.size(); ++i) {
-		coefs.row(used[i]) = coefs1.row(i);
+
+	if (!cleaned) {
+		expand_lr_coefs(coefs, xcols, used_cols);
 	}
 	return true;
-}
-
-bool linreg (
-	regression_type t,
-	const_mat_view X,
-	const_mat_view Y,
-	const cvec &w,
-	double var,
-	mat &coefs,
-	rvec &intercept ) 
-{
-	mat Xc(X), Yc(Y);
-	return linreg_d(t, Xc, Yc, w, var, coefs, intercept);
 }
 
 bool nfoldcv(const_mat_view X, const_mat_view Y, double var, int n, regression_type t, rvec &avg_error) {
@@ -437,7 +432,7 @@ bool nfoldcv(const_mat_view X, const_mat_view Y, double var, int n, regression_t
 		Ytrain.block(0, 0, start, ycols) = Yrand.block(0, 0, start, ycols);
 		Ytrain.block(start, 0, train_rows - start, ycols) = Yrand.block(end, 0, train_rows - start, ycols);
 		
-		if (!linreg_d(t, Xtrain, Ytrain, cvec(), var, coefs, intercept))
+		if (!linreg(t, Xtrain, Ytrain, cvec(), var, false, coefs, intercept))
 			return false;
 		
 		pred = Xtest * coefs;

@@ -153,8 +153,7 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 	}
 
 	mat coefs;
-	linreg_d(FORWARD, X, Y, w, noise_var, coefs, intercept);
-	//linreg_d(LASSO, X, Y, cvec(), noise_var, coefs, intercept);
+	linreg(FORWARD, X, Y, w, noise_var, false, coefs, intercept);
 	y = x * coefs + intercept;
 	
 	lin_coefs.resize(coefs.rows());

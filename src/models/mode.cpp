@@ -450,7 +450,7 @@ bool em_mode::update_fits(double noise_var) {
 	}
 	mat coefs;
 	rvec inter;
-	linreg_d(REGRESSION_ALG, X, Y, cvec(), noise_var, coefs, inter);
+	linreg(REGRESSION_ALG, X, Y, cvec(), noise_var, false, coefs, inter);
 	coefficients = coefs.col(0);
 	intercept = inter(0);
 	stale = false;

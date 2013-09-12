@@ -200,7 +200,7 @@ bool find_spurious_regressors(const mat &X, const mat &Y, double noise_var, cons
 		Xin.bottomRows(bottom_size) = X.bottomRows(bottom_size);
 		Yin.bottomRows(bottom_size) = Y.bottomRows(bottom_size);
 
-		if (!linreg(FORWARD, Xin, Yin, dummy, noise_var, coefs_in, inter_in)) {
+		if (!linreg(FORWARD, Xin, Yin, dummy, noise_var, false, coefs_in, inter_in)) {
 			FATAL("linear regression failed");
 		}
 		
@@ -280,7 +280,7 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 		pick_rows(X, mss, Xmss);
 		pick_rows(Y, mss, Ymss);
 		static int dbgcount = 0;
-		if (!linreg_d(FORWARD, Xmss, Ymss, dummy, noise_var, C, inter)) {
+		if (!linreg(FORWARD, Xmss, Ymss, dummy, noise_var, false, C, inter)) {
 			FATAL("linear regression failed");
 		}
 		Yp = (X * C).rowwise() + inter;
