@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include "serializable.h"
+#include "params.h"
 
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
@@ -285,7 +286,7 @@ public:
 	bool intersects(const bbox &b) const {
 		int d;
 		for (d = 0; d < 3; ++d) {
-			if (max_pt[d] < b.min_pt[d] || min_pt[d] > b.max_pt[d]) {
+			if (max_pt[d] + INTERSECT_THRESH < b.min_pt[d] || min_pt[d] - INTERSECT_THRESH > b.max_pt[d]) {
 				return false;
 			}
 		}

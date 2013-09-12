@@ -41,7 +41,7 @@ bool ontop(const sgnode *tn, const sgnode *bn) {
 	bb.get_vals(bmin, bmax);
 	double h1 = tmax(2) - tmin(2), h2 = bmax(2) - bmin(2);
 	double margin = min(h1, h2) * .05;
-	if (tmin[2] < bmax[2] - margin) {
+	if (tmin(2) < bmax(2) - margin) {
 		// too far inside
 		return false;
 	}
