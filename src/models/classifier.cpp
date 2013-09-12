@@ -575,7 +575,7 @@ void classifier::update() {
 		pos_cls->update(ci->mem_rel, cj->mem_rel, *rels, data, foil, prune, nc_type);
 		p->clsfr = pos_cls;
 		p->negated = false;
-		if (pos_cls->get_success_rate() < .99) {
+		if (pos_cls->get_success_rate() < 1.0) {
 			neg_cls = new binary_classifier(loggers);
 			neg_cls->update(cj->mem_rel, ci->mem_rel, *rels, data, foil, prune, nc_type);
 			if (neg_cls->get_success_rate() > pos_cls->get_success_rate()) {
