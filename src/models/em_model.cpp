@@ -141,7 +141,7 @@ public:
 		mode = 0;
 		mode = em.predict(target, sig, rels, x, mode, y(0), vote_trace);
 		if (test) {
-			em.all_predictions(target, sig, x, all_preds);
+			em.all_predictions(target, sig, rels, x, all_preds);
 			mode_info.resize(all_preds.size());
 			mode_info(0) = mode;
 			for (int i = 1, iend = all_preds.size(); i < iend; ++i) {

@@ -60,9 +60,7 @@ public:
 	void add_data(int t);
 	bool run(int maxiters);
 	int  predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int mode, double &y, rvec &vote_trace) const;
-	// Return the mode with the model that best fits (x, y)
-	int  best_mode(int target, const scene_sig &sig, const rvec &x, double y, double &besterror) const;
-	void all_predictions(int target, const scene_sig &sig, const rvec &x, rvec &preds) const;
+	void all_predictions(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, rvec &preds) const;
 	
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
