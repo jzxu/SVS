@@ -78,7 +78,7 @@ private:
 };
 
 em_mode::em_mode(bool noise, bool manual, const model_train_data &data, logger_set *loggers) 
-: noise(noise), manual(manual), data(data), new_fit(true), n_nonzero(-1), loggers(loggers)
+: noise(noise), manual(manual), data(data), new_fit(true), n_nonzero(-1), loggers(loggers), intercept(INF)
 {
 	if (noise) {
 		stale = false;
@@ -88,97 +88,89 @@ em_mode::em_mode(bool noise, bool manual, const model_train_data &data, logger_s
 	
 }
 
-void em_mode::get_params(scene_sig &sig, rvec &coefs, double &inter) const {
-	sig = this->sig;
-	coefs = coefficients;
-	inter = intercept;
-}
-
 void em_mode::set_params(const scene_sig &dsig, int target, const rvec &coefs, double inter) {
 	n_nonzero = 0;
 	intercept = inter;
-	if (coefs.size() == 0) {
-		coefficients.resize(0);
-	} else {
-		// find relevant objects (with nonzero coefficients)
-		vector<int> relevant_objs;
-		relevant_objs.push_back(target);
+	roles.clear();
+	if (coefs.size() > 0) {
+		vector<int> role_map;
+		role target_role;
+		target_role.type = dsig[target].type;
+		target_role.properties = dsig[target].props;
+		target_role.coefficients = coefs.segment(dsig[target].start, dsig[target].props.size());
+		roles.push_back(target_role);
+		role_map.push_back(target);
 		for (int i = 0; i < dsig.size(); ++i) {
 			if (i == target) {
 				continue;
 			}
 			int start = dsig[i].start;
 			int end = start + dsig[i].props.size();
-			bool relevant = false;
+			bool is_role = false;
 			for (int j = start; j < end; ++j) {
 				if (coefs(j) != 0.0) {
 					++n_nonzero;
-					relevant = true;
+					is_role = true;
 				}
 			}
-			if (relevant) {
-				relevant_objs.push_back(i);
+			if (is_role) {
+				role r;
+				r.type = dsig[i].type;
+				r.properties = dsig[i].props;
+				r.coefficients = coefs.segment(start, end - start);
+				roles.push_back(r);
+				role_map.push_back(i);
 			}
 		}
 		
-		int end = 0;
-		coefficients.resize(coefs.size());
-		sig.clear();
-		for (int i = 0; i < relevant_objs.size(); ++i) {
-			const scene_sig::entry &e = dsig[relevant_objs[i]];
-			sig.add(e);
-			int start = e.start, n = e.props.size();
-			coefficients.segment(end, n) = coefs.segment(start, n);
-			end += n;
-		}
-		coefficients.conservativeResize(end);
-		
-		if (obj_maps.size() == 0) {
-			obj_map_entry e;
-			e.obj_map = relevant_objs;
-			obj_maps.push_back(e);
+		if (role_maps.size() == 0) {
+			role_map_entry e;
+			e.role_map = role_map;
+			role_maps.push_back(e);
 		} else {
-			assert(obj_maps.size() == 1);        // all existing members must have the same signature
-			obj_maps[0].obj_map = relevant_objs;
+			assert(role_maps.size() == 1);        // all existing members must have the same signature
+			role_maps[0].role_map = role_map;
 		}
 	}
 	new_fit = true;
+	role_classifiers_stale = true;
 }
 
 /*
  Upon return, mapping[i] will contain the position in dsig that holds the
- object to be mapped to the i'th variable in the model signature. Again, the
- mapping vector will hold indexes, not ids.
+ object to be mapped to the i'th role. Again, the mapping vector will hold
+ indexes, not ids.
 */
-bool em_mode::map_objs(int target, const scene_sig &dsig, const relation_table &rels, vector<int> &mapping) const {
+bool em_mode::map_roles(int target, const scene_sig &dsig, const relation_table &rels, vector<int> &mapping) const {
 	vector<bool> used(dsig.size(), false);
 	used[target] = true;
-	mapping.resize(sig.empty() ? 1 : sig.size(), -1);
+	mapping.resize(roles.empty() ? 1 : roles.size(), -1);
 	mapping[0] = target;  // target always maps to target
 	
-	update_obj_classifiers();
+	update_role_classifiers();
 	
 	var_domains domains;
 	// 0 = time, 1 = target, 2 = object we're searching for
 	domains[0].insert(0);
 	domains[1].insert(dsig[target].id);
 	
-	for (int i = 1; i < sig.size(); ++i) {
+	for (int i = 1, iend = roles.size(); i < iend; ++i) {
+		const FOIL_result &clsfr = roles[i].classifier;
 		set<int> &d = domains[2];
 		d.clear();
 		for (int j = 0; j < dsig.size(); ++j) {
-			if (!used[j] && dsig[j].type == sig[i].type) {
+			if (!used[j] && dsig[j].type == roles[i].type) {
 				d.insert(dsig[j].id);
 			}
 		}
 		if (d.empty()) {
 			return false;
-		} else if (d.size() == 1 || obj_classifiers[i].clauses.empty()) {
+		} else if (d.size() == 1 || clsfr.clauses.empty()) {
 			mapping[i] = dsig.find_id(*d.begin());
 		} else {
 			bool found = false;
-			for (int j = 0, jend = obj_classifiers[i].clauses.size(); j < jend; ++j) {
-				CSP csp(obj_classifiers[i].clauses[j].cl, rels);
+			for (int j = 0, jend = clsfr.clauses.size(); j < jend; ++j) {
+				CSP csp(clsfr.clauses[j].cl, rels);
 				if (csp.solve(domains)) {
 					assert(d.size() == 1);
 					mapping[i] = dsig.find_id(*d.begin());
@@ -199,22 +191,21 @@ bool em_mode::map_objs(int target, const scene_sig &dsig, const relation_table &
  pos_obj and neg_obj can probably be cached and updated as data points
  are assigned to modes.
 */
-void em_mode::update_obj_classifiers() const {
-	if (!obj_classifiers_stale) {
+void em_mode::update_role_classifiers() const {
+	if (!role_classifiers_stale) {
 		return;
 	}
 	
 	const relation_table &rels = data.get_all_rels();
-	obj_classifiers.resize(sig.size());
-	for (int i = 1; i < sig.size(); ++i) {   // 0 is always target, no need to map
-		string type = sig[i].type;
+	for (int i = 1; i < roles.size(); ++i) {   // 0 is always target, no need to map
+		string type = roles[i].type;
 		relation pos_obj(3), neg_obj(3);
 		int_tuple objs(2);
 
-		for (int j = 0, jend = obj_maps.size(); j < jend; ++j) {
-			const vector<int> &m = obj_maps[j].obj_map;
-			const interval_set &mem = obj_maps[j].members;
-			assert(m.size() == sig.size());
+		for (int j = 0, jend = role_maps.size(); j < jend; ++j) {
+			const vector<int> &m = role_maps[j].role_map;
+			const interval_set &mem = role_maps[j].members;
+			assert(m.size() == roles.size());
 			interval_set::const_iterator k, kend;
 			for (k = mem.begin(), kend = mem.end(); k != kend; ++k) {
 				const model_train_inst &d = data.get_inst(*k);
@@ -233,18 +224,18 @@ void em_mode::update_obj_classifiers() const {
 			}
 		}
 		
-		if (!run_FOIL(pos_obj, neg_obj, rels, true, true, loggers, obj_classifiers[i])) {
+		FOIL_result *r = const_cast<FOIL_result*>(&roles[i].classifier);
+		if (!run_FOIL(pos_obj, neg_obj, rels, true, true, loggers, *r)) {
 			// respond to this situation appropriately
-			cerr << "FOIL failed for object " << i << endl;
+			cerr << "FOIL failed for role " << i << endl;
 		}
 	}
-	obj_classifiers_stale = false;
+	role_classifiers_stale = false;
 }
 
 void em_mode::proxy_get_children(map<string, cliproxy*> &c) {
 	c["clauses"] = new memfunc_proxy<em_mode>(this, &em_mode::cli_clauses);
 	c["members"] = new memfunc_proxy<em_mode>(this, &em_mode::cli_members);
-	c["sig"]     = new memfunc_proxy<em_mode>(this, &em_mode::cli_sig);
 }
 
 void em_mode::proxy_use_sub(const vector<string> &args, ostream &os) {
@@ -255,13 +246,13 @@ void em_mode::proxy_use_sub(const vector<string> &args, ostream &os) {
 		get_function_string(func);
 		os << "function" << endl << func << endl << endl;
 
-		os << "object maps" << endl;
-		for (int i = 0, iend = obj_maps.size(); i < iend; ++i) {
-			int d = obj_maps[i].members.ith(0);
+		os << "role maps" << endl;
+		for (int i = 0, iend = role_maps.size(); i < iend; ++i) {
+			int d = role_maps[i].members.ith(0);
 			const scene_sig &dsig = *data.get_inst(d).sig;
-			const vector<int> &omap = obj_maps[i].obj_map;
+			const vector<int> &omap = role_maps[i].role_map;
 
-			os << obj_maps[i].members << endl;
+			os << role_maps[i].members << endl;
 			for (int j = 0, jend = omap.size(); j < jend; ++j) {
 				os << j << " -> " << dsig[omap[j]].name << endl;
 			}
@@ -271,20 +262,20 @@ void em_mode::proxy_use_sub(const vector<string> &args, ostream &os) {
 }
 
 void em_mode::cli_clauses(const vector<string> &args, ostream &os) const {
-	update_obj_classifiers();
+	update_role_classifiers();
 	
 	if (!args.empty()) {
 		int i;
-		if (!parse_int(args[0], i) || i < 0 || i >= obj_classifiers.size()) {
-			os << "specify valid object (1 - " << obj_classifiers.size() - 1 << ")" << endl;
+		if (!parse_int(args[0], i) || i < 0 || i >= roles.size()) {
+			os << "specify valid role (1 - " << roles.size() - 1 << ")" << endl;
 			return;
 		}
-		obj_classifiers[i].inspect_detailed(os);
+		roles[i].classifier.inspect_detailed(os);
 		os << endl;
 	} else {
-		for (int i = 1, iend = obj_classifiers.size(); i < iend; ++i) {
-			os << "OBJECT " << i << endl;
-			obj_classifiers[i].inspect(os);
+		for (int i = 1, iend = roles.size(); i < iend; ++i) {
+			os << "ROLE " << i << endl;
+			roles[i].classifier.inspect(os);
 			os << endl << endl;
 		}
 	}
@@ -294,66 +285,44 @@ void em_mode::cli_members(ostream &os) const {
 	os << members << endl;
 }
 
-void em_mode::cli_sig(ostream &os) const {
-	sig.print(os);
-}
-
 /*
  The fields noise, data, and sigs are initialized in the constructor, and
  therefore not (un)serialized.
 */
 void em_mode::serialize(ostream &os) const {
-	serializer(os) << stale << new_fit << members << obj_maps << sig << obj_classifiers << sorted_ys
-	               << coefficients << intercept << n_nonzero << manual << obj_classifiers_stale;
+	serializer(os) << stale << new_fit << members << role_maps << roles << sorted_ys
+	               << intercept << n_nonzero << manual << role_classifiers_stale;
 }
 
 void em_mode::unserialize(istream &is) {
-	unserializer(is) >> stale >> new_fit >> members >> obj_maps >> sig >> obj_classifiers >> sorted_ys
-	                 >> coefficients >> intercept >> n_nonzero >> manual >> obj_classifiers_stale;
+	unserializer(is) >> stale >> new_fit >> members >> role_maps >> roles >> sorted_ys
+	                 >> intercept >> n_nonzero >> manual >> role_classifiers_stale;
 }
 
-double em_mode::assignment_error(const scene_sig &dsig, const rvec &x, double y, double noise_var, const vector<int> &assign) const {
-	int xlen = sig.dim();
-	rvec xc(xlen);
-	int s = 0;
-	assert(assign.size() == sig.size());
-	for (int i = 0, iend = assign.size(); i < assign.size(); ++i) {
-		const scene_sig::entry &e = dsig[assign[i]];
-		int l = e.props.size();
-		assert(sig[i].props.size() == l);
-		xc.segment(s, l) = x.segment(e.start, l);
-		s += l;
-	}
-	assert(s == xlen);
-	double py = xc.dot(coefficients) + intercept;
-	return fabs(y - py);
-}
-
-double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, double y, double noise_var, vector<int> &best_assign) const {
+double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, double y, double noise_var, vector<int> &role_map) const {
 	if (noise) {
 		return INF;
 	}
 	
-	best_assign.clear();
+	role_map.clear();
 
-	if (sig.empty()) {
-		// should be constant prediction
-		assert(coefficients.size() == 0);
+	if (roles.empty()) {
+		// constant prediction
 		return fabs(y - intercept);
 	}
 	
 	/*
 	 See if any of the existing mappings result in acceptable error
 	*/
-	for (int i = 0, iend = obj_maps.size(); i < iend; ++i) {
-		const vector<int> &m = obj_maps[i].obj_map;
+	for (int i = 0, iend = role_maps.size(); i < iend; ++i) {
+		const vector<int> &m = role_maps[i].role_map;
 		/* check if it's legal */
 		if (m[0] != target) {
 			continue;
 		}
 		bool legal = true;
 		for (int j = 0, jend = m.size(); j < jend; ++j) {
-			if (sig[j].type != dsig[m[j]].type) {
+			if (roles[j].type != dsig[m[j]].type) {
 				legal = false;
 				break;
 			}
@@ -361,16 +330,16 @@ double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, dou
 		if (!legal) {
 			continue;
 		}
-		double error = assignment_error(dsig, x, y, noise_var, m);
+		double error = fabs(y - predict(dsig, x, m));
 		//if (error < NUM_STDEVS_THRESH * sqrt(noise_var)) {
 		if (error < 1e-15) {
-			best_assign = m;
+			role_map = m;
 			return error;
 		}
 	}
 
 	/*
-	 No existing object map results in acceptable error, so now try all possible
+	 No existing role map results in acceptable error, so now try all possible
 	 assignments.
 	*/
 	
@@ -380,11 +349,11 @@ double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, dou
 	 object indices that can be assigned to position i in the model
 	 signature.
 	*/
-	vector<vector<int> > possibles(sig.size());
+	vector<vector<int> > possibles(roles.size());
 	possibles[0].push_back(target);
-	for (int i = 1; i < sig.size(); ++i) {
+	for (int i = 1; i < roles.size(); ++i) {
 		for (int j = 0; j < dsig.size(); ++j) {
-			if (dsig[j].type == sig[i].type && j != target) {
+			if (dsig[j].type == roles[i].type && j != target) {
 				possibles[i].push_back(j);
 			}
 		}
@@ -394,13 +363,13 @@ double em_mode::calc_error(int target, const scene_sig &dsig, const rvec &x, dou
 	/*
 	 Iterate through all assignments and find the one that gives lowest error
 	*/
-	vector<int> assign;
+	vector<int> rm;
 	double best_error = INF;
-	while (gen.next(assign)) {
-		double error = assignment_error(dsig, x, y, noise_var, assign);
+	while (gen.next(rm)) {
+		double error = fabs(y - predict(dsig, x, rm));
 		if (error < best_error) {
 			best_error = error;
-			best_assign = assign;
+			role_map = rm;
 		}
 	}
 	return best_error;
@@ -411,21 +380,21 @@ bool em_mode::update_fits(double noise_var) {
 		return false;
 	}
 	if (members.empty()) {
-		coefficients.resize(0);
+		roles.clear();
 		intercept = 0.0;
 		return false;
 	}
 	int xcols = 0;
-	for (int i = 0; i < sig.size(); ++i) {
-		xcols += sig[i].props.size();
+	for (int i = 0, iend = roles.size(); i < iend; ++i) {
+		xcols += roles[i].coefficients.size();
 	}
 	
 	mat X(members.size(), xcols), Y(members.size(), 1);
 	int j = 0;
-	for (int i = 0, iend = obj_maps.size(); i < iend; ++i) {
-		const vector<int> &m = obj_maps[i].obj_map;
-		const interval_set &members = obj_maps[i].members;
-		assert(m.size() == sig.size());
+	for (int i = 0, iend = role_maps.size(); i < iend; ++i) {
+		const vector<int> &m = role_maps[i].role_map;
+		const interval_set &members = role_maps[i].members;
+		assert(m.size() == roles.size());
 		interval_set::const_iterator k, kend;
 		for (k = members.begin(), kend = members.end(); k != kend; ++k) {
 			const model_train_inst &d = data.get_inst(*k);
@@ -445,74 +414,86 @@ bool em_mode::update_fits(double noise_var) {
 	mat coefs;
 	rvec inter;
 	linreg(REGRESSION_ALG, X, Y, cvec(), noise_var, false, coefs, inter);
-	coefficients = coefs.col(0);
 	intercept = inter(0);
+	rvec coefs1 = coefs.col(0);
+
+	n_nonzero = 0;
+	int last = 0;
+	rvec c;
+	for (int i = 0, iend = roles.size(), s = 0; i < iend; ++i) {
+		int n = roles[i].coefficients.size();
+		c = coefs1.segment(s, n);
+		s += n;
+		int k = (c.array() != 0.0).count();
+		if (i == 0 || k > 0) {
+			if (last < i) {
+				roles[last] = roles[i];
+			}
+			roles[last].coefficients = c;
+			++last;
+			n_nonzero += k;
+		}
+	}
+
 	stale = false;
 	new_fit = true;
 	return true;
 }
 
-double em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> &ex_omap) const {
-	if (coefficients.size() == 0) {
-		return intercept;
+double em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> &role_map) const {
+	double sum = intercept;
+	assert(role_map.size() == roles.size());
+	for (int i = 0, iend = role_map.size(); i < iend; ++i) {
+		const scene_sig::entry &e = dsig[role_map[i]];
+		assert(roles[i].type == e.type);
+		sum += roles[i].coefficients.dot(x.segment(e.start, e.props.size()));
 	}
-	
-	assert(ex_omap.size() == sig.size());
-	rvec xc(x.size());
-	int xsize = 0;
-	for (int j = 0, jend = ex_omap.size(); j < jend; ++j) {
-		const scene_sig::entry &e = dsig[ex_omap[j]];
-		int n = e.props.size();
-		xc.segment(xsize, n) = x.segment(e.start, n);
-		xsize += n;
-	}
-	xc.conservativeResize(xsize);
-	return xc.dot(coefficients) + intercept;
+	return sum;
 }
 
-void em_mode::add_example(int t, const vector<int> &ex_obj_map, double noise_var) {
-	assert(!members.contains(t) && ex_obj_map.size() == sig.size());
+void em_mode::add_example(int t, const vector<int> &ex_role_map, double noise_var) {
+	assert(!members.contains(t) && ex_role_map.size() == roles.size());
 	
 	const model_train_inst &d = data.get_inst(t);
 	members.insert(t);
 	
 	bool found = false;
-	for (int i = 0, iend = obj_maps.size(); i < iend; ++i) {
-		if (obj_maps[i].obj_map == ex_obj_map) {
-			obj_maps[i].members.insert(t);
+	for (int i = 0, iend = role_maps.size(); i < iend; ++i) {
+		if (role_maps[i].role_map == ex_role_map) {
+			role_maps[i].members.insert(t);
 			found = true;
 			break;
 		}
 	}
 	if (!found) {
-		obj_map_entry e;
-		e.obj_map = ex_obj_map;
+		role_map_entry e;
+		e.role_map = ex_role_map;
 		e.members.insert(t);
-		obj_maps.push_back(e);
+		role_maps.push_back(e);
 	}
 
 	if (noise) {
 		sorted_ys.insert(make_pair(d.y(0), t));
 	} else {
-		double py = predict(*d.sig, d.x, ex_obj_map);
+		double py = predict(*d.sig, d.x, ex_role_map);
 		if (fabs(d.y(0) - py) > sqrt(noise_var) * NUM_STDEVS_THRESH) {
 			stale = true;
 		}
 	}
-	obj_classifiers_stale = true;
+	role_classifiers_stale = true;
 }
 
 void em_mode::del_example(int t) {
 	const model_train_inst &d = data.get_inst(t);
 
 	members.erase(t);
-	for (int i = 0, iend = obj_maps.size(); i < iend; ++i) {
-		obj_maps[i].members.erase(t);
+	for (int i = 0, iend = role_maps.size(); i < iend; ++i) {
+		role_maps[i].members.erase(t);
 	}
 	if (noise) {
 		sorted_ys.erase(make_pair(d.y(0), t));
 	}
-	obj_classifiers_stale = true;
+	role_classifiers_stale = true;
 	stale = true;
 }
 
@@ -548,7 +529,7 @@ bool em_mode::unifiable(int sig, int target) const {
 			break;
 		}
 	}
-	return !manual && uniform_sig && obj_maps.size() == 1;
+	return !manual && uniform_sig && role_maps.size() == 1;
 }
 
 int em_mode::get_num_nonzero_coefs() const {
@@ -568,12 +549,14 @@ void em_mode::get_function_string(string &s) const {
 	stringstream ss;
 	int k = 0;
 	bool first = true;
-	for (int i = 0, iend = sig.size(); i < iend; ++i) {
-		for (int j = 0, jend = sig[i].props.size(); j < jend; ++j, ++k) {
-			double c = coefficients(k);
+	for (int i = 0, iend = roles.size(); i < iend; ++i) {
+		const role &r = roles[i];
+		for (int j = 0, jend = r.coefficients.size(); j < jend; ++j, ++k) {
+			double c = r.coefficients(j);
 			if (c == 0.0) {
 				continue;
-			} else if (first) {
+			}
+			if (first) {
 				if (approx_equal(c, -1.0, SAME_THRESH)) {
 					ss << "-";
 				} else if (!approx_equal(c, 1.0, SAME_THRESH)) {
@@ -591,7 +574,7 @@ void em_mode::get_function_string(string &s) const {
 					ss << c << " * ";
 				}
 			}
-			ss << i << ":" << sig[i].type << ":" << sig[i].props[j];
+			ss << i << ":" << r.type << ":" << r.properties[j];
 		}
 	}
 	
@@ -605,11 +588,19 @@ void em_mode::get_function_string(string &s) const {
 	s = ss.str();
 }
 
-void em_mode::obj_map_entry::serialize(std::ostream &os) const {
-	serializer(os) << obj_map << members;
+void em_mode::role_map_entry::serialize(ostream &os) const {
+	serializer(os) << role_map << members;
 }
 
-void em_mode::obj_map_entry::unserialize(std::istream &is) {
-	unserializer(is) >> obj_map >> members;
+void em_mode::role_map_entry::unserialize(istream &is) {
+	unserializer(is) >> role_map >> members;
+}
+
+void em_mode::role::serialize(ostream &os) const {
+	serializer(os) << type << properties << coefficients << classifier;
+}
+
+void em_mode::role::unserialize(istream &is) {
+	unserializer(is) >> type >> properties >> coefficients >> classifier;
 }
 

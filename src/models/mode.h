@@ -24,12 +24,9 @@ public:
 	void del_example(int i);
 	double predict(const scene_sig &s, const rvec &x, const std::vector<int> &obj_map) const;
 	void largest_const_subset(std::vector<int> &subset);
-	const std::set<int> &get_noise(int sigindex) const;
-	void get_noise_sigs(std::vector<int> &sigs);
 	double calc_error(int target, const scene_sig &sig, const rvec &x, double y, double noise_var, std::vector<int> &best_assign) const;
 	bool update_fits(double noise_var);
 	
-	void get_params(scene_sig &sig, rvec &coefs, double &intercepts) const;
 	void set_params(const scene_sig &dsig, int target, const rvec &coefs, double inter);
 	bool unifiable(int sig, int target) const;
 
@@ -39,9 +36,9 @@ public:
 	bool is_manual() const { return manual; }
 	void reset_new_fit() { new_fit = false; }
 	
-	const scene_sig &get_sig() const { return sig; }
+	int num_roles() const { return roles.size(); }
 
-	bool map_objs(int target, const scene_sig &dsig, const relation_table &rels, std::vector<int> &mapping) const;
+	bool map_roles(int target, const scene_sig &dsig, const relation_table &rels, std::vector<int> &mapping) const;
 	
 	int get_num_nonzero_coefs() const;
 	
@@ -52,37 +49,40 @@ private:
 	interval_set members;
 
 	/*
-	 For each member instance, there is a mapping from objects tested by the
-	 linear function to object indexes in the member's signature, call it the
-	 object map. An object map is stored as a vector m such that m[i] = j, where i is an index
-	 into the mode's signature, and j is an index into the instance's signature.
-	 The omap_table associates unique omaps with sets of instances that share that
-	 omap.
-
-	 I'm assuming that the number of unique omaps will be small.
+	 Maintain a set of maps from the mode's roles to objects in each example.
+	 Since many examples will share the same role map, keep only unique maps and
+	 keep track of which member examples use which maps. The role map is stored as
+	 a vector m such that m[i] = j, where i is an index into the mode's signature,
+	 and j is an index into the instance's signature.
 	*/
-	class obj_map_entry : public serializable {
+	class role_map_entry : public serializable {
 	public:
-		std::vector<int> obj_map;
+		std::vector<int> role_map;
 		interval_set     members;  // members with this object map
 		
 		void serialize(std::ostream &os) const;
 		void unserialize(std::istream &is);
 	};
-	std::vector<obj_map_entry> obj_maps;
+	std::vector<role_map_entry> role_maps;
 	
 	bool stale, noise, new_fit, manual;
+	mutable bool role_classifiers_stale;
 	const model_train_data &data;
-	
-	rvec coefficients;
 	double intercept;
 	int n_nonzero;
 
-	/*
-	 Each mode has a signature that specifies the type of each object that the
-	 mode function is conditioned on. Call this the mode signature.
-	*/
-	scene_sig sig;
+	class role : public serializable {
+	public:
+		std::string type;
+		std::vector<std::string> properties;
+		rvec coefficients;
+		FOIL_result classifier;
+
+		void serialize(std::ostream &os) const;
+		void unserialize(std::istream &is);
+	};
+
+	std::vector<role> roles;
 	
 	/*
 	 Noise data sorted by their Y values. First element in pair is the Y value,
@@ -90,24 +90,15 @@ private:
 	*/
 	std::set<std::pair<double, int> > sorted_ys;
 	
-	/*
-	 Each object the model is conditioned on needs to be
-	 identifiable with a set of first-order Horn clauses
-	 learned with FOIL.
-	*/
-	mutable std::vector<FOIL_result> obj_classifiers;
-	mutable bool obj_classifiers_stale;
 	
 	logger_set *loggers;
 
-	void update_obj_classifiers() const;
+	void update_role_classifiers() const;
 	
-	double assignment_error(const scene_sig &dsig, const rvec &x, double y, double noise_var, const std::vector<int> &assign) const;
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
 	void cli_clauses(const std::vector<std::string> &args, std::ostream &os) const;
 	void cli_members(std::ostream &os) const;
-	void cli_sig(std::ostream &os) const;
 };
 
 #endif

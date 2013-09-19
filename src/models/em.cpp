@@ -457,8 +457,8 @@ void EM::estep() {
 			   - Error(m, j) decreases, and m is not the current best mode
 			*/
 			double new_error;
-			new_error = modes[j]->calc_error(d.target, *d.sig, d.x, d.y(0), noise_var, m.sig_map);
-			assert(is_inf(new_error) || m.sig_map.size() == modes[j]->get_sig().size());
+			new_error = modes[j]->calc_error(d.target, *d.sig, d.x, d.y(0), noise_var, m.role_map);
+			assert(is_inf(new_error) || m.role_map.size() == modes[j]->num_roles());
 			if ((inst.mode == j && new_error > m.error) || (inst.mode != j && new_error < m.error)) {
 				best_stale = true;
 			}
@@ -492,8 +492,8 @@ void EM::estep() {
 				if (prev == 0) {
 					sigs[d.sig]->noise.erase(i);
 				}
-				assert(modes[best]->get_sig().size() == inst.minfo[best].sig_map.size());
-				modes[best]->add_example(i, inst.minfo[best].sig_map, noise_var);
+				assert(modes[best]->num_roles() == inst.minfo[best].role_map.size());
+				modes[best]->add_example(i, inst.minfo[best].role_map, noise_var);
 				if (best == 0) {
 					sigs[d.sig]->noise.insert(i);
 				}
@@ -707,20 +707,20 @@ bool EM::unify_or_add_mode() {
  mode using classifier. Return the mode used, or 0 if prediction failed.
 */
 int EM::predict(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, int mode, double &y, rvec &vote_trace) const {
-	vector<int> obj_map;
+	vector<int> role_map;
 	if (mode > 0) {
-		if (!modes[mode]->map_objs(target, sig, rels, obj_map)) {
+		if (!modes[mode]->map_roles(target, sig, rels, role_map)) {
 			mode = 0;
 		}
 	} else {
 		if (insts.empty()) {
 			mode = 0;
 		} else {
-			mode = classify(target, sig, rels, x, obj_map, vote_trace);
+			mode = classify(target, sig, rels, x, role_map, vote_trace);
 		}
 	}
 	if (mode > 0) {
-		y = modes[mode]->predict(sig, x, obj_map);
+		y = modes[mode]->predict(sig, x, role_map);
 	} else {
 		y = NAN;
 	}
@@ -948,14 +948,14 @@ void inst_info::unserialize(istream &is) {
 }
 
 void inst_info::mode_info::serialize(ostream &os) const {
-	serializer(os) << error << error_stale << sig_map;
+	serializer(os) << error << error_stale << role_map;
 }
 
 void inst_info::mode_info::unserialize(istream &is) {
-	unserializer(is) >> error >> error_stale >> sig_map;
+	unserializer(is) >> error >> error_stale >> role_map;
 }
 
-int EM::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &obj_map, rvec &vote_trace) const {
+int EM::classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, vector<int> &role_map, rvec &vote_trace) const {
 	vector<int> votes, order;
 	clsfr.classify(target, sig, rels, x, votes, vote_trace);
 	
@@ -976,11 +976,11 @@ int EM::classify(int target, const scene_sig &sig, const relation_table &rels, c
 			return 0;
 		}
 		em_mode &m = *modes[order[i]];
-		if (m.get_sig().size() > sig.size()) {
+		if (m.num_roles() > sig.size()) {
 			continue;
 		}
-		obj_map.clear();
-		if (!m.map_objs(target, sig, rels, obj_map)) {
+		role_map.clear();
+		if (!m.map_roles(target, sig, rels, role_map)) {
 			loggers->get(LOG_EM) << "mapping failed for " << i << endl;
 			continue;
 		}

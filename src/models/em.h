@@ -26,7 +26,7 @@ public:
 	public:
 		double error;               // residual error of using this mode to predict this data point
 		bool error_stale;           // does error need to be update?
-		std::vector<int> sig_map;   // map from objects in this instance to variables in mode sig
+		std::vector<int> role_map;  // map from objects in this instance to mode roles
 	
 		mode_info() : error(INF), error_stale(true) {}
 		void serialize(std::ostream &os) const;
