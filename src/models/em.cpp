@@ -649,7 +649,7 @@ bool EM::unify_or_add_mode() {
 	loggers->get(LOG_EM) << "unify_or_add_mode: found " << largest.size() << " colinear examples in noise." << endl;
 
 	if (largest.size() < NEW_MODE_THRESH) {
-		check_after = modes[0]->size() + NEW_MODE_THRESH - potential;
+		check_after = modes[0]->size() + NEW_MODE_THRESH;
 		return false;
 	}
 	
@@ -781,7 +781,9 @@ bool EM::run(int maxiters) {
 	for (int i = 0; i < maxiters; ++i) {
 		estep();
 		bool changed = mstep();
-		if (!changed && !remove_modes() && !unify_or_add_mode()) {
+		changed |= remove_modes();
+		changed |= unify_or_add_mode();
+		if (!changed) {
 			// reached quiescence
 			return true;
 		}
@@ -823,6 +825,7 @@ void EM::proxy_get_children(map<string, cliproxy*> &c) {
 	
 	c["error_table"] = new memfunc_proxy<EM>(this, &EM::cli_error_table);
 	c["add_mode"] =    new memfunc_proxy<EM>(this, &EM::cli_add_mode);
+	c["update_classifiers"] = new memfunc_proxy<EM>(this, &EM::cli_update_classifiers);
 }
 
 void EM::cli_error_table(ostream &os) const {
@@ -875,6 +878,12 @@ void EM::cli_add_mode(const vector<string> &args, ostream &os) {
 	new_mode->set_params(*inst.sig, inst.target, coefs, intercept);
 }
 
+void EM::cli_update_classifiers(ostream &os) {
+	clsfr.update();
+	for (int i = 1, iend = modes.size(); i < iend; ++i) {
+		modes[i]->update_role_classifiers();
+	}
+}
 
 void EM::serialize(ostream &os) const {
 	serializer sr(os);

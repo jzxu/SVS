@@ -68,6 +68,7 @@ public:
 	
 	void update_class(int i, int old_class, int new_class);
 	void classify(int target, const scene_sig &sig, const relation_table &rels, const rvec &x, std::vector<int> &votes, rvec &trace) const;
+	void update();
 
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);
@@ -112,7 +113,6 @@ private:
 	logger_set *loggers;
 
 	pair_info *find(int i, int j);
-	void update();
 	
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);

@@ -182,7 +182,8 @@ private:
 	bool                      use_models;
 	bool                      record_movie;
 	scene                    *scn_cache;      // temporarily holds top-state scene during init
-	
+	bool                      save_scene;
+
 	std::map<std::string, model*> models;
 	
 	timer_set timers;

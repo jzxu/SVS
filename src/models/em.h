@@ -99,6 +99,7 @@ private:
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void cli_error_table(std::ostream &os) const;
 	void cli_add_mode(const std::vector<std::string> &args, std::ostream &os);
+	void cli_update_classifiers(std::ostream &os);
 
 	typedef std::map<const scene_sig*,sig_info*> sig_table;
 	const model_train_data &data;

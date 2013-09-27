@@ -142,11 +142,15 @@ void em_mode::set_params(const scene_sig &dsig, int target, const rvec &coefs, d
  indexes, not ids.
 */
 bool em_mode::map_roles(int target, const scene_sig &dsig, const relation_table &rels, vector<int> &mapping) const {
+	mapping.resize(roles.size(), -1);
+	if (roles.empty()) {
+		return true;
+	}
+
 	vector<bool> used(dsig.size(), false);
 	used[target] = true;
-	mapping.resize(roles.empty() ? 1 : roles.size(), -1);
 	mapping[0] = target;  // target always maps to target
-	
+
 	update_role_classifiers();
 	
 	var_domains domains;

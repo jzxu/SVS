@@ -398,7 +398,7 @@ void svs_state::disown_scene() {
 }
 
 svs::svs(agent *a)
-: use_models(false), record_movie(false), scn_cache(NULL)
+: use_models(false), record_movie(false), scn_cache(NULL), save_scene(false)
 {
 	si = new soar_interface(a);
 	draw = new drawer();
@@ -442,7 +442,7 @@ void svs::state_deletion_callback(Symbol *state) {
 	svs_state *s;
 	s = state_stack.back();
 	assert(state == s->get_state());
-	if (state_stack.size() == 1) {
+	if (state_stack.size() == 1 && save_scene) {
 		// removing top state, save scene for reinit
 		scn_cache = s->get_scene();
 		s->disown_scene();

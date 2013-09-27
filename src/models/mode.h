@@ -45,6 +45,8 @@ public:
 	/* return a string representation of the linear function */
 	void get_function_string(std::string &s) const;
 	
+	void update_role_classifiers() const;
+	
 private:
 	interval_set members;
 
@@ -93,8 +95,6 @@ private:
 	
 	logger_set *loggers;
 
-	void update_role_classifiers() const;
-	
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
 	void cli_clauses(const std::vector<std::string> &args, std::ostream &os) const;
