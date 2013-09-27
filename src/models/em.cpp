@@ -405,25 +405,16 @@ EM::EM(const model_train_data &data, logger_set *loggers,
 EM::~EM() {
 	clear_and_dealloc(insts);
 	clear_and_dealloc(modes);
-	clear_and_dealloc(sigs);
 }
 
 
 void EM::add_data(int t) {
 	function_timer tm(timers.get_or_add("learn"));
-	
+
 	const model_train_inst &d = data.get_inst(t);
+
+	noise_by_types[d.types_index].insert(t);
 	inst_info *inst = new inst_info;
-	sig_info *s = NULL;
-	if (has(sigs, d.sig)) {
-		s = sigs[d.sig];
-	} else {
-		s = new sig_info;
-		sigs[d.sig] = s;
-	}
-	s->members.push_back(t);
-	s->noise.insert(t);
-	
 	inst->mode = 0;
 	inst->minfo.resize(modes.size());
 	insts.push_back(inst);
@@ -490,12 +481,12 @@ void EM::estep() {
 				inst.mode = best;
 				modes[prev]->del_example(i);
 				if (prev == 0) {
-					sigs[d.sig]->noise.erase(i);
+					noise_by_types[d.types_index].erase(i);
 				}
 				assert(modes[best]->num_roles() == inst.minfo[best].role_map.size());
 				modes[best]->add_example(i, inst.minfo[best].role_map, noise_var);
 				if (best == 0) {
-					sigs[d.sig]->noise.insert(i);
+					noise_by_types[d.types_index].insert(i);
 				}
 				clsfr.update_class(i, prev, best);
 			}
@@ -614,26 +605,18 @@ bool EM::unify_or_add_mode() {
 	mat coefs(0,1);
 	rvec inter;
 	modes[0]->largest_const_subset(largest);
-	int potential = largest.size();
 	inter = data.get_inst(largest[0]).y; // constant model
 	if (largest.size() < NEW_MODE_THRESH) {
 		mat X, Y;
-		sig_table::const_iterator i, iend;
-		for (i = sigs.begin(), iend = sigs.end(); i != iend; ++i) {
-			const interval_set &ns = i->second->noise;
-			if (ns.size() < check_after) {
-				if (ns.size() > potential) {
-					potential = ns.size();
-				}
+		map<int, interval_set>::const_iterator i, iend;
+		for (i = noise_by_types.begin(), iend = noise_by_types.end(); i != iend; ++i) {
+			const interval_set &inds = i->second;
+			if (inds.size() < check_after) {
 				continue;
 			}
-			interval_set inds(ns);
 			vector<int> subset;
 			fill_xy(inds, X, Y);
 			ransac(X, Y, noise_var, NEW_MODE_THRESH, 0, true, subset, coefs, inter);
-			if (subset.size() > potential) {
-				potential = subset.size();
-			}
 			if (subset.size() > largest.size()) {
 				largest.clear();
 				for (int i = 0; i < subset.size(); ++i) {
@@ -887,11 +870,7 @@ void EM::cli_update_classifiers(ostream &os) {
 
 void EM::serialize(ostream &os) const {
 	serializer sr(os);
-	sr << insts << clsfr << nc_type << modes.size() << '\n';
-	vector<const scene_sig*> s = data.get_sigs();
-	for (int i = 0, iend = s.size(); i < iend; ++i) {
-		sr << *map_get(sigs, s[i]) << '\n';
-	}
+	sr << insts << clsfr << nc_type << modes.size() << noise_by_types << '\n';
 	for (int i = 0, iend = modes.size(); i < iend; ++i) {
 		sr << *modes[i] << '\n';
 	}
@@ -902,16 +881,8 @@ void EM::unserialize(istream &is) {
 	int nmodes;
 	
 	clear_and_dealloc(insts);
-	unsr >> insts >> clsfr >> nc_type >> nmodes;
+	unsr >> insts >> clsfr >> nc_type >> nmodes >> noise_by_types;
 	assert(insts.size() == data.size());
-	
-	clear_and_dealloc(sigs);
-	vector<const scene_sig*> s = data.get_sigs();
-	for (int i = 0, iend = s.size(); i < iend; ++i) {
-		sig_info *si = new sig_info;
-		unsr >> *si;
-		sigs[s[i]] = si;
-	}
 	
 	clear_and_dealloc(modes);
 	for (int i = 0, iend = nmodes; i < iend; ++i) {
@@ -1001,15 +972,5 @@ int EM::classify(int target, const scene_sig &sig, const relation_table &rels, c
 	
 	FATAL("Reached unreachable line in EM::classify");
 	return -1;
-}
-
-sig_info::sig_info() {}
-
-void sig_info::serialize(ostream &os) const {
-	serializer(os) << members << noise;
-}
-
-void sig_info::unserialize(istream &is) {
-	unserializer(is) >> members >> noise;
 }
 

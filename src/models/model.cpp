@@ -458,6 +458,20 @@ void model_train_data::add(int target, const scene_sig &sig, const relation_tabl
 		inst->sig_index = sigs.size() - 1;
 		inst->sig = newsig;
 	}
+
+	vector<string> t;
+	for (int i = 0, iend = inst->sig->size(); i < iend; ++i) {
+		t.push_back((*inst->sig)[i].type);
+	}
+	for (int i = 0, iend = types.size(); i < iend; ++i) {
+		if (types[i] == t) {
+			inst->types_index = i;
+		}
+	}
+	if (inst->types_index < 0) {
+		types.push_back(t);
+		inst->types_index = types.size() - 1;
+	}
 	
 	inst->x = x;
 	inst->y = y;
@@ -481,7 +495,7 @@ void model_train_data::serialize(ostream &os) const {
 	
 	for (int i = 0, iend = insts.size(); i < iend; ++i) {
 		const model_train_inst *inst = insts[i];
-		sr << inst->sig_index << inst->target << static_cast<int>(inst->x.size()) << static_cast<int>(inst->y.size());
+		sr << inst->types_index << inst->sig_index << inst->target << static_cast<int>(inst->x.size()) << static_cast<int>(inst->y.size());
 		for (int i = 0, iend = inst->x.size(); i < iend; ++i) {
 			sr << inst->x(i);
 		}
@@ -493,6 +507,7 @@ void model_train_data::serialize(ostream &os) const {
 	sr << "CONTINUOUS_DATA_END" << '\n';
 	sr << "ALL_RELS_BEGIN" << '\n' << all_rels << '\n' << "ALL_RELS_END" << '\n';
 	sr << "CONTEXT_RELS_BEGIN" << '\n' << context_rels << '\n' << "CONTEXT_RELS_END" << '\n';
+	sr << types;
 }
 
 void model_train_data::unserialize(istream &is) {
@@ -515,7 +530,7 @@ void model_train_data::unserialize(istream &is) {
 	for (int i = 0; i < ninsts; ++i) {
 		model_train_inst *inst = new model_train_inst;
 		int xsz, ysz;
-		unsr >> inst->sig_index >> inst->target >> xsz >> ysz;
+		unsr >> inst->types_index >> inst->sig_index >> inst->target >> xsz >> ysz;
 		inst->sig = sigs[inst->sig_index];
 		inst->x.resize(xsz);
 		inst->y.resize(ysz);
@@ -538,6 +553,7 @@ void model_train_data::unserialize(istream &is) {
 	assert(label == "CONTEXT_RELS_BEGIN");
 	unsr >> context_rels >> label;
 	assert(label == "CONTEXT_RELS_END");
+	unsr >> types;
 }
 
 void model_train_data::proxy_get_children(map<string, cliproxy*> &c) {

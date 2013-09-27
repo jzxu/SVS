@@ -41,16 +41,6 @@ public:
 	void unserialize(std::istream &is);
 };
 
-class sig_info : public serializable {
-public:
-	std::vector<int> members;  // indexes of data points with this sig
-	std::set<int> noise;       // indexes of noise data with this signature
-
-	sig_info();
-	void serialize(std::ostream &os) const;
-	void unserialize(std::istream &is);
-};
-
 class EM : public serializable, public cliproxy {
 public:
 	EM(const model_train_data &data, logger_set *loggers);
@@ -101,11 +91,11 @@ private:
 	void cli_add_mode(const std::vector<std::string> &args, std::ostream &os);
 	void cli_update_classifiers(std::ostream &os);
 
-	typedef std::map<const scene_sig*,sig_info*> sig_table;
 	const model_train_data &data;
 	std::vector<inst_info*> insts;
 	std::vector<em_mode*> modes;
-	sig_table sigs;
+	std::map<int, interval_set> noise_by_types;
+
 	classifier clsfr;
 	
 	bool use_unify, learn_new_modes;

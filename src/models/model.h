@@ -19,9 +19,10 @@ struct model_train_inst {
 	rvec x, y;
 	int target;
 	int sig_index;
+	int types_index;
 	const scene_sig *sig;
 	
-	model_train_inst() : target(-1), sig(NULL) {}
+	model_train_inst() : target(-1), sig_index(-1), types_index(-1), sig(NULL) {}
 };
 
 class prediction_info : public serializable {
@@ -71,6 +72,8 @@ private:
 	void cli_save(const std::vector<std::string> &args, std::ostream &os) const;
 
 	std::vector<scene_sig*> sigs;
+	// this vector is distinct from sigs in that only the object types are considered
+	std::vector<std::vector<std::string> > types;
 	std::vector<model_train_inst*> insts;
 	relation_table all_rels, context_rels;
 };
