@@ -41,15 +41,15 @@ void gpr(const mat &Xtrain, const cvec &ytrain, const rvec &xtest, double sigma,
 }
 
 void LWR::example::serialize(ostream &os) const {
-	serializer(os) << x << y;
+	serializer(os) << x << y << x_norm << cx << cx_norm;
 }
 
 void LWR::example::unserialize(istream &is) {
-	unserializer(is) >> x >> y;
+	unserializer(is) >> x >> y >> x_norm >> cx >> cx_norm;
 }
 
-LWR::LWR(int nnbrs, double noise_var, bool alloc)
-: nnbrs(nnbrs), alloc(alloc), xdim(-1), ydim(-1), normalized(false), noise_var(noise_var)
+LWR::LWR(bool alloc)
+: nnbrs(10), noise_var(1e-15), alloc(alloc), xdim(-1), ydim(-1), normalized(false), center(true)
 {}
 
 LWR::~LWR() {
@@ -61,15 +61,14 @@ LWR::~LWR() {
 	}
 }
 
-void LWR::learn(const rvec &x, const rvec &y) {
+void LWR::learn(const rvec &x, const rvec &cx, const rvec &y) {
 	example e;
 	
 	if (xdim < 0) {
 		xdim = x.size();
 		ydim = y.size();
-		xmin.resize(xdim);
-		xmax.resize(xdim);
-		xrange.resize(xdim);
+	} else if (x.size() != xdim || y.size() != ydim) {
+		FATAL("LWR dimension mismatch");
 	}
 	
 	if (alloc) {
@@ -79,19 +78,29 @@ void LWR::learn(const rvec &x, const rvec &y) {
 		e.x = &x;
 		e.y = &y;
 	}
-	data.push_back(e);
+	e.cx = cx;
 	
-	if (data.size() == 1) {
-		xmin = x;
-		xmax = x;
-		xrange.setZero();
+	if (data.size() == 0) {
+		x_min = x;
+		x_max = x;
+		x_range.setZero();
+		cx_min = cx;
+		cx_max = cx;
+		cx_range.setZero();
 	} else {
 		for (int i = 0; i < xdim; ++i) {
-			if (x[i] < xmin[i]) {
-				xmin[i] = x[i];
+			if (x(i) < x_min(i)) {
+				x_min(i) = x(i);
 				normalized = false;
-			} else if (x[i] > xmax[i]) {
-				xmax[i] = x[i];
+			} else if (x(i) > x_max(i)) {
+				x_max(i) = x(i);
+				normalized = false;
+			}
+			if (cx(i) < cx_min(i)) {
+				cx_min(i) = cx(i);
+				normalized = false;
+			} else if (cx(i) > cx_max(i)) {
+				cx_max(i) = cx(i);
 				normalized = false;
 			}
 		}
@@ -99,31 +108,34 @@ void LWR::learn(const rvec &x, const rvec &y) {
 	
 	if (normalized) {
 		// otherwise just wait for renormalization
-		rvec xn;
-		norm_vec(x, xmin, xrange, xn);
-		Xnorm.append_row(xn);
+		norm_vec(*e.x, x_min, x_range, e.x_norm);
+		norm_vec(e.cx, cx_min, cx_range, e.cx_norm);
 	}
+
+	data.push_back(e);
 }
 
-bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &lin_coefs, rvec &intercept) {
-	int k = data.size() > nnbrs ? nnbrs : data.size();
-	if (k < 2) {
+bool LWR::predict(const rvec &x, const rvec &cx, rvec &y, rvec &neighbors, rvec &dists, rvec &lin_coefs) {
+	if (data.size() < 2) {
 		return false;
 	}
 	
 	normalize();
 	
-	rvec xn;
-	norm_vec(x, xmin, xrange, xn);
+	rvec q;
+	if (center) {
+		norm_vec(cx, cx_min, cx_range, q);
+	} else {
+		norm_vec(x, x_min, x_range, q);
+	}
 	
 	vector<int> inds;
-	brute_nearest_neighbor(Xnorm.get(), xn, k, inds, dists);
+	nearest_neighbor(q, inds, dists);
 	
-	mat X(k, xdim);
-	mat Y(k, ydim);
-	neighbors.resize(k);
-	dists.resize(k);
-	for(int i = 0; i < k; ++i) {
+	mat X(inds.size(), xdim);
+	mat Y(inds.size(), ydim);
+	neighbors.resize(inds.size());
+	for(int i = 0, iend = inds.size(); i < iend; ++i) {
 		X.row(i) = *data[inds[i]].x;
 		Y.row(i) = *data[inds[i]].y;
 		neighbors(i) = inds[i];
@@ -153,13 +165,18 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 	}
 
 	mat coefs;
+	rvec intercept;
+	//linreg(FORWARD, X, Y, w, noise_var, false, coefs, intercept);
+	//linreg(FORWARD, X, Y, cvec(), noise_var, false, coefs, intercept);
 	linreg(FORWARD, X, Y, w, noise_var, false, coefs, intercept);
 	y = x * coefs + intercept;
 	
-	lin_coefs.resize(coefs.rows());
+	lin_coefs.resize(coefs.rows() + 1);
 	for (int i = 0, iend = coefs.rows(); i < iend; ++i) {
 		lin_coefs(i) = coefs(i, 0);
 	}
+	lin_coefs(lin_coefs.size() - 1) = intercept(0);
+
 	/*
 	double sigma, clen, mean, var;
 	sigma = 1e-4;
@@ -167,6 +184,7 @@ bool LWR::predict(const rvec &x, rvec &y, rvec &neighbors, rvec &dists, rvec &li
 	gpr(X, Y.col(0), x, sigma, clen, mean, var);
 	y(0) = mean;
 	*/
+
 	return true;
 }
 
@@ -175,31 +193,75 @@ void LWR::normalize() {
 		return;
 	}
 	
-	xrange = xmax - xmin;
+	cx_range = cx_max - cx_min;
 	// can't have division by 0
-	for (int i = 0; i < xrange.size(); ++i) {
-		if (xrange[i] == 0.0) {
-			xrange[i] = 1.0;
+	for (int i = 0; i < cx_range.size(); ++i) {
+		if (cx_range(i) == 0.0) {
+			cx_range(i) = 1.0;
 		}
 	}
 
-	Xnorm.resize(data.size(), data[0].x->size());
-	rvec n;
 	for (int i = 0, iend = data.size(); i < iend; ++i) {
-		norm_vec(*data[i].x, xmin, xrange, n);
-		Xnorm.row(i) = n;
+		norm_vec(data[i].cx, cx_min, cx_range, data[i].cx_norm);
 	}
+
+	x_range = x_max - x_min;
+	// can't have division by 0
+	for (int i = 0; i < x_range.size(); ++i) {
+		if (x_range(i) == 0.0) {
+			x_range(i) = 1.0;
+		}
+	}
+
+	for (int i = 0, iend = data.size(); i < iend; ++i) {
+		norm_vec(*data[i].x, x_min, x_range, data[i].x_norm);
+	}
+
 	normalized = true;
 }
 
 void LWR::serialize(ostream &os) const {
 	assert(alloc);  // it doesn't make sense to serialize points we don't own
-	serializer(os) << xdim << ydim << xmin << xmax << data;
+	serializer(os) << xdim << ydim << x_min << x_max << cx_min << cx_max << data << nnbrs << noise_var << center;
 }
 
 void LWR::unserialize(istream &is) {
 	assert(alloc);
-	unserializer(is) >> xdim >> ydim >> xmin >> xmax >> data;
+	unserializer(is) >> xdim >> ydim >> x_min >> x_max >> cx_min >> cx_max >> data >> nnbrs >> noise_var >> center;
 	normalized = false;
 	normalize();
 }
+
+// copied from nn.cpp to accommodate data type
+void LWR::nearest_neighbor(const rvec &q, vector<int> &indexes, rvec &dists) {
+	di_queue nn;
+	for (int i = 0, iend = data.size(); i < iend; ++i) {
+		double d;
+		if (center) {
+			d = (q - data[i].cx_norm).squaredNorm();
+		} else {
+			d = (q - data[i].x_norm).squaredNorm();
+		}
+		if (nn.size() < nnbrs || d < nn.top().first) {
+			nn.push(std::make_pair(d, i));
+			if (nn.size() > nnbrs) {
+				nn.pop();
+			}
+		}
+	}
+
+	indexes.reserve(nn.size());
+	dists.resize(nn.size());
+	for (int i = 0; i < dists.size(); ++i) {
+		dists(i) = nn.top().first;
+		indexes.push_back(nn.top().second);
+		nn.pop();
+	}
+}
+
+void LWR::proxy_get_children(map<string, cliproxy*> &c) {
+	c["noise_var"] = new float_proxy(&noise_var, "Expected variance of environment noise.");
+	c["neighbors"] = new int_proxy(&nnbrs, "Number of neighbors to use.");
+	c["center"] = new bool_proxy(&center, "Center points around target");
+}
+

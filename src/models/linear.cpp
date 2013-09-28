@@ -362,7 +362,6 @@ bool linreg(regression_type t, mat &X, mat &Y, const cvec &w, double var, bool c
 	}
 
 	if (augment) {
-		assert(coefs.rows() == X.cols() + 1);
 		inter = coefs.row(coefs.rows() - 1);
 		coefs.conservativeResize(coefs.rows()-1, coefs.cols());
 	} else {
