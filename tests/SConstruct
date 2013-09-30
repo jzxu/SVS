@@ -45,7 +45,7 @@ def exe(name, objs):
 
 common = ['common', 'mat', 'serialize', 'timer', 'cliproxy', 'relation', 'platform_specific' ]
 
-run_lda          = common + ['numeric_classifier', 'run_lda']
+test_nc          = common + ['numeric_classifier', 'test_nc']
 run_foil         = common + ['foil', 'run_foil']
 test_foil        = common + ['foil', 'test_foil']
 test_intervalset = common + ['test_intervalset']
@@ -72,7 +72,7 @@ test_em = common + [
 	'test_em',
 ]
 
-#exe('run_lda', run_lda)
+exe('test_nc', test_nc)
 #exe('run_foil', run_foil)
 #exe('combine_rels', combine_rels)
 #exe('test_foil', test_foil)

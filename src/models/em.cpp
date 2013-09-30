@@ -763,9 +763,7 @@ bool EM::remove_modes() {
 bool EM::run(int maxiters) {
 	for (int i = 0; i < maxiters; ++i) {
 		estep();
-		bool changed = mstep();
-		changed |= remove_modes();
-		changed |= unify_or_add_mode();
+		bool changed = mstep() || remove_modes() || unify_or_add_mode();
 		if (!changed) {
 			// reached quiescence
 			return true;

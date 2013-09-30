@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
 	y1.resize(y.size(), 1);
 	y1.col(0) = y;
 
-	if (!linreg(type, X, y1, cvec(), variance, coefs1, intercept1)) {
+	if (!linreg(type, X, y1, cvec(), variance, false, coefs1, intercept1)) {
 		cerr << "regression failed" << endl;
 		exit(1);
 	}

@@ -69,6 +69,7 @@ public:
 	std::vector<FOIL_result_clause> clauses;
 	relation true_negatives;
 	relation false_negatives;
+	bool default_class;
 
 	void serialize(std::ostream &os) const;
 	void unserialize(std::istream &is);

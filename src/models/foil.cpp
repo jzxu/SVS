@@ -578,10 +578,14 @@ bool FOIL::learn(bool prune, bool record_errors, FOIL_result &result) {
 	relation pos_test, neg_test, pos_left;
 	bool dead;
 	
+	result.clauses.clear();
+	result.true_negatives.clear();
+	result.false_negatives.clear();
+	result.default_class = false;
 	if (neg.empty()) {
+		result.default_class = true;
 		return true;
 	}
-	result.clauses.clear();
 	int_tuple t;
 	t.push_back(0);
 	pos_left = pos;
@@ -1057,11 +1061,11 @@ void FOIL_result_clause::unserialize(istream &is) {
 }
 
 void FOIL_result::serialize(ostream &os) const {
-	serializer(os) << clauses << true_negatives << false_negatives;
+	serializer(os) << clauses << true_negatives << false_negatives << default_class;
 }
 
 void FOIL_result::unserialize(istream &is) {
-	unserializer(is) >> clauses >> true_negatives >> false_negatives;
+	unserializer(is) >> clauses >> true_negatives >> false_negatives >> default_class;
 }
 
 void FOIL_result::inspect(ostream &os) const {

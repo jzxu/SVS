@@ -169,7 +169,7 @@ bool em_mode::map_roles(int target, const scene_sig &dsig, const relation_table 
 		}
 		if (d.empty()) {
 			return false;
-		} else if (d.size() == 1 || clsfr.clauses.empty()) {
+		} else if (d.size() == 1 || clsfr.default_class == true) {
 			mapping[i] = dsig.find_id(*d.begin());
 		} else {
 			bool found = false;

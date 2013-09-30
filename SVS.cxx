@@ -13,7 +13,7 @@
 #include "src/models/dtree.cpp"
 #include "src/models/em.cpp"
 #include "src/models/foil.cpp"
-#include "src/models/lda.cpp"
+#include "src/models/numeric_classifier.cpp"
 #include "src/models/linear.cpp"
 #include "src/models/lwr.cpp"
 #include "src/models/mode.cpp"
