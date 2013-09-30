@@ -59,13 +59,13 @@ private:
 		const mat &data,
 		const std::vector<int> &classes,
 		const std::vector<std::vector<int> > &sorted_dims,
-		const std::vector<bool> &ex_usable);
+		const std::vector<int> &indexes);
 	
 	void choose_split(
 		const mat &data,
 		const std::vector<int> &classes,
 		const std::vector<std::vector<int> > &sorted_dims,
-		const std::vector<bool> &ex_usable);
+		const std::vector<int> &indexes);
 
 	void print(std::ostream &os) const;
 
@@ -343,15 +343,10 @@ double split_entropy(const vector<int> &left_counts, const vector<int> &right_co
 	return e;
 }
 
-int most_common_class(const vector<int> &classes, const vector<bool> &ex_usable) {
-	vector<int> counts;
-	for (int i = 0, iend = classes.size(); i < iend; ++i) {
-		if (ex_usable[i]) {
-			if (classes[i] >= counts.size()) {
-				counts.resize(classes[i] + 1);
-			}
-			++counts[classes[i]];
-		}
+int most_common_class(const vector<int> &classes, const vector<int> &indexes) {
+	vector<int> counts(2, 0); // classes 0 or 1
+	for (int i = 0, iend = indexes.size(); i < iend; ++i) {
+		++counts[classes[indexes[i]]];
 	}
 	return argmax(counts);
 }
@@ -360,28 +355,31 @@ void dtree_classifier::choose_split(
 	const mat &data,
 	const vector<int> &classes,
 	const vector<vector<int> > &sorted_dims,
-	const vector<bool> &ex_usable)
+	const vector<int> &indexes)
 {
-	int n = data.rows();
+	vector<bool> usable(data.rows(), false);
 	split_dim = -1;
 	split_val = INF;
 	double best_entropy = 0.0;
+
+	for (int i = 0, iend = indexes.size(); i < iend; ++i) {
+		usable[indexes[i]] = true;
+	}
+
 	for (int i = 0, iend = sorted_dims.size(); i < iend; ++i) {
 		vector<int> left_counts(2), right_counts(2); // 2 classes - 0 and 1
 		int left_total = 0, right_total = 0;
-		for (int j = 0; j < n; ++j) {
-			int a = sorted_dims[i][j];
-			if (ex_usable[a]) {
-				++right_counts[classes[a]];
-				++right_total;
-			}
+		for (int j = 0, jend = indexes.size(); j < jend; ++j) {
+			++right_counts[classes[indexes[j]]];
+			++right_total;
 		}
+		assert(right_total > 0);
 
 		double prev_val = INF;
 		int prev_cls = -1;
-		for (int j = 0; j < n; ++j) {
+		for (int j = 0, jend = sorted_dims[i].size(); j < jend; ++j) {
 			int k = sorted_dims[i][j];
-			if (!ex_usable[k]) {
+			if (!usable[k]) {
 				continue;
 			}
 
@@ -409,29 +407,43 @@ void dtree_classifier::learn_rec(
 	const mat &data,
 	const vector<int> &classes,
 	const vector<vector<int> > &sorted_dims,
-	const vector<bool> &ex_usable)
+	const vector<int> &indexes)
 {
-	choose_split(data, classes, sorted_dims, ex_usable);
-	if (split_dim < 0) {
-		cls = most_common_class(classes, ex_usable);
-		assert(cls >= 0);
+	if (indexes.size() <= 3) {
+		cls = most_common_class(classes, indexes);
 		return;
 	}
 
-	vector<bool> left_ex_usable(ex_usable.begin(), ex_usable.end());
-	vector<bool> right_ex_usable(ex_usable.begin(), ex_usable.end());
+	choose_split(data, classes, sorted_dims, indexes);
+	if (split_dim < 0) {
+		cls = most_common_class(classes, indexes);
+		return;
+	}
 
-	for (int i = 0, iend = data.rows(); i < iend; ++i) {
-		if (data(i, split_dim) <= split_val) {
-			right_ex_usable[i] = false;
+	vector<int> left_indexes, right_indexes;
+	for (int i = 0, iend = indexes.size(); i < iend; ++i) {
+		int j = indexes[i];
+		if (data(j, split_dim) <= split_val) {
+			left_indexes.push_back(j);
 		} else {
-			left_ex_usable[i] = false;
+			right_indexes.push_back(j);
 		}
 	}
+	if (left_indexes.empty()) {
+		split_dim = -1;
+		cls = 1;
+		return;
+	}
+	if (right_indexes.empty()) {
+		split_dim = -1;
+		cls = 0;
+		return;
+	}
+	assert(left_indexes.size() > 0 && right_indexes.size() > 0);
 	left = new dtree_classifier(depth+1);
 	right = new dtree_classifier(depth+1);
-	left->learn_rec(data, classes, sorted_dims, left_ex_usable);
-	right->learn_rec(data, classes, sorted_dims, right_ex_usable);
+	left->learn_rec(data, classes, sorted_dims, left_indexes);
+	right->learn_rec(data, classes, sorted_dims, right_indexes);
 	assert((cls >= 0 && split_dim < 0) || (cls < 0 && split_dim >= 0));
 }
 
@@ -464,9 +476,12 @@ void dtree_classifier::learn(mat &data, const vector<int> &classes) {
 		sort(sorted_dims[i].begin(), sorted_dims[i].end(), dim_sorter(data, classes, i));
 	}
 
-	vector<bool> ex_usable(data.rows(), true);
-
-	learn_rec(data, classes, sorted_dims, ex_usable);
+	vector<int> indexes;
+	indexes.reserve(data.rows());
+	for (int i = 0, iend = data.rows(); i < iend; ++i) {
+		indexes.push_back(i);
+	}
+	learn_rec(data, classes, sorted_dims, indexes);
 }
 
 int dtree_classifier::classify(const rvec &x) const {
