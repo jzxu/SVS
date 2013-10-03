@@ -188,6 +188,6 @@ private:
 	}
 };
 
-model *_make_em_model_(svs *owner, const string &name) {
+model *make_em_model(const string &name, svs *owner) {
 	return new EM_model(owner, name);
 }

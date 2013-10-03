@@ -153,7 +153,7 @@ public:
 	void input_callback();
 	void add_input(const std::string &in);
 	std::string get_output() const;
-	bool add_model(const std::string &name, model *m);
+	bool add_model(const std::string &name, const std::string &type);
 	std::map<std::string, model*> *get_models() { return &models; }
 
 	const output_spec *get_output_spec() { return &outspec; }

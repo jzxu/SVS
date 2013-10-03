@@ -76,7 +76,7 @@ private:
 	}
 };
 
-model *_make_lwr_model_(svs *owner, const string &name) {
+model *make_lwr_model(const string &name) {
 	return new lwr_model(name);
 }
 

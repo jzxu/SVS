@@ -1,7 +1,6 @@
 #include <string>
 #include "svs.h"
 #include "command.h"
-#include "model.h"
 
 using namespace std;
 
@@ -23,23 +22,22 @@ void read_list(soar_interface *si, Symbol *id, vector<string> &words) {
 	}
 }
 
-model *parse_model_struct(soar_interface *si, Symbol *cmd, svs *owner) {
+bool parse_model_struct(soar_interface *si, Symbol *cmd, string &name, string &type) {
 	wme *type_wme, *name_wme;
-	string name, type;
 	
 	if (!si->find_child_wme(cmd, "type", type_wme) ||
 		!si->get_val(si->get_wme_val(type_wme), type))
 	{
-		return NULL;
+		return false;
 	}
 	
 	if (!si->find_child_wme(cmd, "name", name_wme) ||
 		!si->get_val(si->get_wme_val(name_wme), name))
 	{
-		return NULL;
+		return false;
 	}
 	
-	return make_model(owner, name, type);
+	return true;
 }
 
 class create_model_command : public command {
@@ -55,21 +53,20 @@ public:
 	}
 	
 	bool update_sub() {
-		string name;
+		string name, type;
 		
 		if (!changed()) {
 			return !broken;
 		}
 		
-		model *m = parse_model_struct(si, root, get_state()->get_svs());
-		if (!m) {
+		if (!parse_model_struct(si, root, name, type)) {
 			set_status("invalid syntax");
 			broken = true;
 			return false;
 		}
-		if (!svsp->add_model(m->get_name(), m)) {
-			set_status("nonunique name");
-			delete m;
+
+		if (!svsp->add_model(name, type)) {
+			set_status("failed");
 			broken = true;
 			return false;
 		}

@@ -21,12 +21,15 @@
 
 using namespace std;
 
+// model constructors from em_model.cpp and lwr_model.cpp
+model *make_lwr_model(const string &name);
+model *make_em_model(const string &name, svs *owner);
+
 typedef map<wme*,command*>::iterator cmd_iter;
 
 svs_interface *make_svs(agent *a) {
 	return new svs(a);
 }
-
 
 sgwme::sgwme(soar_interface *si, Symbol *ident, sgwme *parent, sgnode *node) 
 : soarint(si), id(ident), parent(parent), node(node)
@@ -631,11 +634,19 @@ int svs::parse_output_spec(const string &s) {
 	return -1;
 }
 
-bool svs::add_model(const string &name, model *m) {
+bool svs::add_model(const string &name, const string &type) {
 	if (models.find(name) != models.end()) {
 		return false;
 	}
-	models[name] = m;
+	if (type == "em") {
+		models[name] = make_em_model(name, this);
+	} else if (type == "lwr") {
+		models[name] = make_lwr_model(name);
+	} else {
+		return false;
+	}
+	use_models = true;
+	state_stack[0]->get_scene()->set_track_distances(true);
 	return true;
 }
 
@@ -650,20 +661,7 @@ void svs::cli_add_model(const vector<string> &args, ostream &os) {
 		os << "Specify name and type." << endl;
 		return;
 	}
-	model *m = make_model(this, args[0], args[1]);
-	if (!m) {
-		os << "Cannot create model. Probably no such type." << endl;
-		return;
+	if (!add_model(args[0], args[1])) {
+		os << "Cannot create model. Either no such type or name already in use." << endl;
 	}
-	if (args.size() >= 3) {
-		ifstream input(args[2].c_str());
-		if (!input) {
-			os << "File could not be read. Model not loaded." << endl;
-			delete m;
-			return;
-		}
-		m->unserialize(input);
-		input.close();
-	}
-	add_model(args[0], m);
 }
