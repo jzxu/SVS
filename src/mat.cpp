@@ -3,6 +3,7 @@
 #include "common.h"
 #include "params.h"
 #include "serialize.h"
+#include "soar_rand.h"
 
 using namespace std;
 dyn_mat::dyn_mat() : buf(0, 0), r(0), c(0), released(false) {}
@@ -258,7 +259,7 @@ void randomize_vec(rvec &v, const rvec &min, const rvec &max) {
 	//v = min.array() + (rvec::Random(v.size()).array() * (max - min).array());
 	// apparently rvec::Random will generate numbers outside of [0, 1]
 	for (int i = 0; i < v.size(); ++i) {
-		v(i) = min(i) + (rand() / (double) RAND_MAX) * (max(i) - min(i));
+		v(i) = min(i) + SoarRand(max(i) - min(i));
 	}
 }
 

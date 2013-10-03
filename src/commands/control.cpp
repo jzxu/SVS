@@ -11,6 +11,7 @@
 #include "common.h"
 #include "params.h"
 #include "filter_table.h"
+#include "soar_rand.h"
 
 using namespace std;
 
@@ -595,12 +596,12 @@ public:
 		std::list<node*>::iterator selected;
 		
 		if (nonleafs.size() > 0 && avg_depth / avg_bf > thresh) {
-			int r = rand() % nonleafs.size();
+			int r = SoarRandInt(nonleafs.size() - 1);
 			selected = nonleafs.begin();
 			advance(selected, r);
 			isleaf = false;
 		} else {
-			int r = rand() % leafs.size();
+			int r = SoarRandInt(leafs.size() - 1);
 			selected = leafs.begin();
 			advance(selected, r);
 			isleaf = true;
@@ -711,7 +712,7 @@ private:
 			
 			rvec step(ci->outspec->size()), newval;
 			randomize_vec(step, ci->min, ci->max);
-			int numsteps = rand() % maxsteps + 1;
+			int numsteps = SoarRandInt(maxsteps);
 			
 			rvec x(state.size() + step.size());
 			for (int i = 0; i < numsteps; ++i) {

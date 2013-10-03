@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cassert>
 #include "common.h"
+#include "soar_rand.h"
 
 using namespace std;
 
@@ -75,7 +76,7 @@ void sample(int k, int low, int high, std::vector<int> &output) {
 		if (i < k) {
 			output[start + i] = low + i;
 		} else {
-			int r = rand() % (i + 1);
+			int r = SoarRandInt(i);
 			if (r < k) {
 				output[start + r] = low + i;
 			}

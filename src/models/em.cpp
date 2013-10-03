@@ -17,25 +17,13 @@
 #include "serialize.h"
 #include "drawer.h"
 #include "logger.h"
+#include "soar_rand.h"
 
 #define DBGCOUNT(n) { static int count = 0; fprintf(stderr, "%s %d\n", n, count++); }
 //#define DBGCOUNT(n)
 
 using namespace std;
 using namespace Eigen;
-
-/* Box-Muller method */
-double randgauss(double mean, double std) {
-	double x1, x2, w;
-	do {
-		x1 = 2.0 * ((double) rand()) / RAND_MAX - 1.0;
-		x2 = 2.0 * ((double) rand()) / RAND_MAX - 1.0;
-		w = x1 * x1 + x2 * x2;
-	} while (w >= 1.0);
-	
-	w = sqrt((-2.0 * log(w)) / w);
-	return mean + std * (x1 * w);
-}
 
 void kernel1(const cvec &d, cvec &w) {
 	w.resize(d.size());
@@ -244,7 +232,7 @@ int ransac_sample(const_mat_view X, const_mat_view Y, const vector<int> &diff_co
 			}
 		}
 		if (!candidates.empty()) {
-			int r = candidates[rand() % candidates.size()];
+			int r = candidates[SoarRandInt(candidates.size() - 1)];
 			out.push_back(offset + r);
 			used[r] = true;
 			++nout;
