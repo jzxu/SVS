@@ -414,6 +414,23 @@ model_train_data::~model_train_data() {
 	clear_and_dealloc(insts);
 }
 
+void model_train_data::set_types_index(model_train_inst *inst) {
+	vector<string> t;
+	const scene_sig &sig = *inst->sig;
+	for (int i = 0, iend = sig.size(); i < iend; ++i) {
+		t.push_back(sig[i].type);
+	}
+	for (int i = 0, iend = types.size(); i < iend; ++i) {
+		if (types[i] == t) {
+			inst->types_index = i;
+		}
+	}
+	if (inst->types_index < 0) {
+		types.push_back(t);
+		inst->types_index = types.size() - 1;
+	}
+}
+	
 void model_train_data::add(int target, const scene_sig &sig, const relation_table &r, const rvec &x, const rvec &y) {
 	model_train_inst *inst = new model_train_inst;
 	for (int i = 0, iend = sigs.size(); i < iend; ++i) {
@@ -432,20 +449,8 @@ void model_train_data::add(int target, const scene_sig &sig, const relation_tabl
 		inst->sig = newsig;
 	}
 
-	vector<string> t;
-	for (int i = 0, iend = inst->sig->size(); i < iend; ++i) {
-		t.push_back((*inst->sig)[i].type);
-	}
-	for (int i = 0, iend = types.size(); i < iend; ++i) {
-		if (types[i] == t) {
-			inst->types_index = i;
-		}
-	}
-	if (inst->types_index < 0) {
-		types.push_back(t);
-		inst->types_index = types.size() - 1;
-	}
-	
+	set_types_index(inst);
+
 	inst->x = x;
 	inst->y = y;
 	inst->target = target;
@@ -468,7 +473,7 @@ void model_train_data::serialize(ostream &os) const {
 	
 	for (int i = 0, iend = insts.size(); i < iend; ++i) {
 		const model_train_inst *inst = insts[i];
-		sr << inst->types_index << inst->sig_index << inst->target << static_cast<int>(inst->x.size()) << static_cast<int>(inst->y.size());
+		sr << inst->sig_index << inst->target << static_cast<int>(inst->x.size()) << static_cast<int>(inst->y.size());
 		for (int i = 0, iend = inst->x.size(); i < iend; ++i) {
 			sr << inst->x(i);
 		}
@@ -480,12 +485,15 @@ void model_train_data::serialize(ostream &os) const {
 	sr << "CONTINUOUS_DATA_END" << '\n';
 	sr << "ALL_RELS_BEGIN" << '\n' << all_rels << '\n' << "ALL_RELS_END" << '\n';
 	sr << "CONTEXT_RELS_BEGIN" << '\n' << context_rels << '\n' << "CONTEXT_RELS_END" << '\n';
-	sr << types;
 }
 
 void model_train_data::unserialize(istream &is) {
 	string line, label;
 	int nsigs, ninsts;
+
+	clear_and_dealloc(sigs);
+	clear_and_dealloc(insts);
+	types.clear();
 
 	unserializer unsr(is);
 	
@@ -503,7 +511,7 @@ void model_train_data::unserialize(istream &is) {
 	for (int i = 0; i < ninsts; ++i) {
 		model_train_inst *inst = new model_train_inst;
 		int xsz, ysz;
-		unsr >> inst->types_index >> inst->sig_index >> inst->target >> xsz >> ysz;
+		unsr >> inst->sig_index >> inst->target >> xsz >> ysz;
 		inst->sig = sigs[inst->sig_index];
 		inst->x.resize(xsz);
 		inst->y.resize(ysz);
@@ -513,6 +521,7 @@ void model_train_data::unserialize(istream &is) {
 		for (int i = 0; i < ysz; ++i) {
 			unsr >> inst->y(i);
 		}
+		set_types_index(inst);
 		insts.push_back(inst);
 	}
 	unsr >> label;
@@ -526,7 +535,6 @@ void model_train_data::unserialize(istream &is) {
 	assert(label == "CONTEXT_RELS_BEGIN");
 	unsr >> context_rels >> label;
 	assert(label == "CONTEXT_RELS_END");
-	unsr >> types;
 }
 
 void model_train_data::proxy_get_children(map<string, cliproxy*> &c) {
@@ -633,6 +641,7 @@ void model_train_data::cli_save(const vector<string> &args, ostream &os) const {
 	if (!f.is_open()) {
 		os << "cannot open file " << args[0] << " for writing" << endl;
 		return;
+
 	}
 	serialize(f);
 	f.close();

@@ -70,6 +70,7 @@ private:
 	void cli_contdata(const std::vector<std::string> &args, std::ostream &os) const;
 	void cli_sigs(const std::vector<std::string> &args, std::ostream &os) const;
 	void cli_save(const std::vector<std::string> &args, std::ostream &os) const;
+	void set_types_index(model_train_inst *inst);
 
 	std::vector<scene_sig*> sigs;
 	// this vector is distinct from sigs in that only the object types are considered
