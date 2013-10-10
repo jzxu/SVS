@@ -13,7 +13,7 @@ public:
     bool compute(const filter_params *params, bool adding, float &res, 
 		 bool &changed) {
 	float newres;
-	const sgnode *a, *b;
+	const sgnode *a = NULL, *b = NULL;
 	int axis = -1;
 	vec3 amin, amax, bmin, bmax, ac, bc;
 	double dist;

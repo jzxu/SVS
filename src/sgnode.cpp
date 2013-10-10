@@ -672,7 +672,7 @@ void ball_node::unserialize_sub(istream &is) {
 
 sgnode *unserialize_sgnode(istream &is) {
 	int node_type;
-	sgnode *n;
+	sgnode *n = NULL;
 
 	unserializer(is) >> node_type;
 	switch (node_type) {

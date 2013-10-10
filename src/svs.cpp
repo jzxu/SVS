@@ -24,6 +24,7 @@ using namespace std;
 // model constructors from em_model.cpp and lwr_model.cpp
 model *make_lwr_model(const string &name);
 model *make_em_model(const string &name, svs *owner);
+model *make_null_model(const string &name);
 
 typedef map<wme*,command*>::iterator cmd_iter;
 
@@ -642,6 +643,8 @@ bool svs::add_model(const string &name, const string &type) {
 		models[name] = make_em_model(name, this);
 	} else if (type == "lwr") {
 		models[name] = make_lwr_model(name);
+	} else if (type == "null") {
+		models[name] = make_null_model(name);
 	} else {
 		return false;
 	}

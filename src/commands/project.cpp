@@ -264,8 +264,8 @@ public:
 	    if (!si->get_val(si->get_wme_attr(*i), pname)) {
 		continue;
 	    }
-	    int axis;
-	    double dval, average;
+	    int axis = -1;
+	    double dval = 0.0, average = 0.0;
 	    if ((pname.compare("aligned") == 0))
 	    {
 		cval = si->get_wme_val(*i);

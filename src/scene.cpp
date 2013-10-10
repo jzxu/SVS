@@ -283,7 +283,7 @@ int scene::parse_add(vector<string> &f, string &error) {
 	string name, type, mods;
 	vector<ptlist> vals;
 	ptlist vertices;
-	double radius;
+	double radius = 0.0;
 	bool is_convex, is_ball;
 
 	if (f.size() < 2) {

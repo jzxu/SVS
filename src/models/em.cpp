@@ -44,10 +44,6 @@ void kernel2(const cvec &d, cvec &w, double p) {
 	}
 }
 
-void predict(const mat &C, const rvec &intercepts, const rvec &x, rvec &y) {
-	y = (x * C) + intercepts;
-}
-
 /*
  Upon return, X and Y will contain the training data, Xtest and Ytest the
  testing data.
@@ -640,7 +636,7 @@ bool EM::unify_or_add_mode() {
 		 model is just as accurate as the original, then just add the noise to that
 		 model instead of creating a new one.
 		*/
-		unify_result best_result;
+		unify_result best_result; best_result.intercept = 0.0; // shut up -Wuninitialized
 		int best_mode = 0;
 		for (int i = 1, iend = modes.size(); i < iend; ++i) {
 			unify_result r;
@@ -812,7 +808,7 @@ void EM::cli_add_mode(const vector<string> &args, ostream &os) {
 	
 	const model_train_inst &inst = data.get_last_inst();
 	rvec coefs(inst.sig->dim());
-	double intercept;
+	double intercept = 0.0;
 	coefs.setConstant(0.0);
 	
 	for (int i = 0, iend = args.size(); i < iend; i += 2) {

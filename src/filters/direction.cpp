@@ -137,7 +137,7 @@ public:
 	: typed_map_filter<bool>(root, si, input), axis(axis), comp(comp) {}
 	
 	bool compute(const filter_params *p, bool adding, bool &res, bool &changed) {
-		const sgnode *a, *b;
+		const sgnode *a = NULL, *b = NULL;
 		
 		if (!get_filter_param(this, p, "a", a)) {
 			return false;
@@ -171,7 +171,7 @@ public:
 	: typed_map_filter<bool>(root, si, input) {}
 	
 	bool compute(const filter_params *p, bool adding, bool &res, bool &changed) {
-		const sgnode *a, *b;
+		const sgnode *a = NULL, *b = NULL;
 		
 		if (!get_filter_param(this, p, "a", a)) {
 			return false;
@@ -192,7 +192,7 @@ public:
 	: typed_map_filter<bool>(root, si, input) {}
 	
 	bool compute(const filter_params *p, bool adding, bool &res, bool &changed) {
-		const sgnode *a, *b, *c;
+		const sgnode *a = NULL, *b = NULL, *c = NULL;
 		
 		if (!get_filter_param(this, p, "a", a)) {
 			return false;

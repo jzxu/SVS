@@ -14,7 +14,7 @@ public:
 	
 	bool compute(const filter_params *p, bool adding, bool &res, bool &changed) {
 		bool newres;
-		const sgnode *a, *b;
+		const sgnode *a = NULL, *b = NULL;
 		
 		if (!get_filter_param(this, p, "a", a)) {
 			return false;

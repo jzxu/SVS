@@ -63,7 +63,7 @@ void draw_predictions(drawer *d, int mode, int nmodes, double pred, double real,
 		init = false;
 	}
 
-	int old_nmodes, old_mode, y;
+	int old_nmodes = 0, old_mode = 0, y = 0;
 	if (name == "b1:vx") {
 		old_nmodes = xnmodes;
 		old_mode = xmode;

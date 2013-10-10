@@ -273,7 +273,7 @@ vec3 project(const vec3 &v, const vec3 &u) {
 
 double dir_separation(const ptlist &a, const ptlist &b, const vec3 &u) {
 	vec3 p;
-	double x, minx, maxx;
+	double x, minx = 0, maxx = 0;
 	for (int i = 0, iend = a.size(); i < iend; ++i) {
 		p = project(a[i], u);
 		x = p(0) / u(0);

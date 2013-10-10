@@ -13,7 +13,7 @@ public:
 
 	bool compute(const filter_params *params, bool adding, double &res, bool &changed) {
 		double newres;
-		const sgnode *a, *b;
+		const sgnode *a = NULL, *b = NULL;
 		
 		if (!get_filter_param(this, params, "a", a) ||
 		    !get_filter_param(this, params, "b", b))
@@ -50,7 +50,7 @@ public:
 
 	bool compute(const filter_params *params, bool adding, double &res, bool &changed) {
 		double newres;
-		const sgnode *a, *b;
+		const sgnode *a = NULL, *b = NULL;
 		
 		if (!get_filter_param(this, params, "a", a) ||
 		    !get_filter_param(this, params, "b", b))
@@ -84,7 +84,7 @@ public:
 	{}
 	
 	bool rank(const filter_params *params, double &rank) {
-		const sgnode *a, *b;
+		const sgnode *a = NULL, *b = NULL;
 		
 		if (!get_filter_param(this, params, "a", a) ||
 		    !get_filter_param(this, params, "b", b))

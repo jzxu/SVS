@@ -66,7 +66,7 @@ public:
 	{}
 
 	bool compute(const filter_params *params, bool adding, bool &res, bool &changed) {
-		const sgnode *tn, *bn;
+		const sgnode *tn = NULL, *bn = NULL;
 		if (!get_filter_param(this, params, "top", tn) || 
 		    !get_filter_param(this, params, "bottom", bn))
 		{

@@ -14,10 +14,10 @@ else:
 	PLATFORM = jp(SRC, 'windows')
 
 env = Environment(
-	CPPPATH = os.environ.get('CPATH','').split(':') + [SRC, MDL, PLATFORM, '../eigen', '../ccd', '../../shared' ],
+	CPPPATH = os.environ.get('CPATH','').split(':') + ['.', SRC, MDL, PLATFORM, '../eigen', '../ccd', '../../shared' ],
 	#CPPFLAGS = ['-Og', '-g', '-Wno-enum-compare'],
-	CPPFLAGS = ['-g', '-Wno-enum-compare'],
-	LINKFLAGS = ['-g'],
+	CPPFLAGS = ['-O2', '-Wno-enum-compare'],
+	#LINKFLAGS = ['-g'],
 	LIBPATH = os.environ.get('LD_LIBRARY_PATH', '').split(':'),
 )
 
@@ -43,7 +43,7 @@ def exe(name, objs):
 	p = env.Program(jp(OUT, name), obj(objs))
 	env.Default(p)
 
-common = ['common', 'mat', 'serialize', 'timer', 'cliproxy', 'relation', 'platform_specific' ]
+common = ['common', 'mat', 'serialize', 'timer', 'cliproxy', 'relation', 'platform_specific', 'soar_rand' ]
 
 test_nc          = common + ['numeric_classifier', 'test_nc']
 run_foil         = common + ['foil', 'run_foil']
@@ -52,6 +52,7 @@ test_intervalset = common + ['test_intervalset']
 test_csp         = common + ['foil', 'test_csp']
 combine_rels     = common + ['combine_rels']
 lr               = common + ['lr', 'linear' ]
+extract_cls_data = common + ['extract_cls_data', 'model', 'em', 'mode', 'linear', 'foil', 'scene_sig', 'classifier', 'numeric_classifier', 'logger']
 
 test_em = common + [
 	'scene_sig',
@@ -79,4 +80,6 @@ exe('test_nc', test_nc)
 #exe('test_intervalset', test_intervalset)
 #exe('test_csp', test_csp)
 #exe('test_em', test_em)
-exe('lr', lr)
+#exe('lr', lr)
+exe('extract_cls_data', extract_cls_data)
+

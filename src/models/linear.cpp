@@ -311,7 +311,7 @@ void expand_lr_coefs(mat &coefs, int newsize, const vector<int> &positions) {
  If cleaned is false, then preprocess the data by calling clean_lr_data first.
 */
 bool linreg(regression_type t, mat &X, mat &Y, const cvec &w, double var, bool cleaned, mat &coefs, rvec &inter) {
-	bool augment, success;
+	bool augment, success = false;
 	rvec Xm, Ym;
 	mat coefs1;
 	vector<int> used_cols;

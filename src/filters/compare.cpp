@@ -12,7 +12,7 @@ public:
 	{}
 	
 	bool compute(const filter_params *params, bool adding, bool &res, bool &changed) {
-		double a, b;
+		double a = 0.0, b = 0.0;
 		string comp;
 		bool newres;
 		

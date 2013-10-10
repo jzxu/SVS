@@ -42,7 +42,7 @@ public:
 			return false;
 		}
 		
-		bool newres;
+		bool newres = false;
 		switch (type) {
 			case 'i':
 				newres = a.intersects(b);

@@ -54,7 +54,7 @@ public:
 	{}
 
 	bool compute(const filter_params *p, filter_val*& out, bool &changed) {
-		const sgnode *a;
+		const sgnode *a = NULL;
 		string prop_name;
 		string prop_value;
 

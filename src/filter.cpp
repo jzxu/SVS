@@ -55,7 +55,7 @@ void filter_input::clear_changes() {
 
 void concat_filter_input::combine(const input_table &inputs) {
 	for (int i = 0, iend = inputs.size(); i < iend; ++i) {
-		filter_params *p;
+		filter_params *p = NULL;
 		filter_output *o = inputs[i].in_fltr->get_output();
 
 		for (int j = o->first_added(), jend = o->num_current(); j < jend; ++j) {
