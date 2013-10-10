@@ -384,8 +384,6 @@ bool em_mode::update_fits(double noise_var) {
 		return false;
 	}
 	if (members.empty()) {
-		roles.clear();
-		intercept = 0.0;
 		return false;
 	}
 	int xcols = 0;
