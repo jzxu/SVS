@@ -52,7 +52,7 @@ test_intervalset = common + ['test_intervalset']
 test_csp         = common + ['foil', 'test_csp']
 combine_rels     = common + ['combine_rels']
 lr               = common + ['lr', 'linear' ]
-extract_cls_data = common + ['extract_cls_data', 'model', 'em', 'mode', 'linear', 'foil', 'scene_sig', 'classifier', 'numeric_classifier', 'logger']
+extract_em_data  = common + ['extract_em_data', 'model', 'em', 'mode', 'linear', 'foil', 'scene_sig', 'classifier', 'numeric_classifier', 'logger']
 
 test_em = common + [
 	'scene_sig',
@@ -81,5 +81,6 @@ exe('test_nc', test_nc)
 #exe('test_csp', test_csp)
 #exe('test_em', test_em)
 #exe('lr', lr)
-exe('extract_cls_data', extract_cls_data)
+exe('extract_em_data', extract_em_data)
+
 
