@@ -446,7 +446,7 @@ void free_geom_shape(geometry *g) {
 		gluDeleteQuadric(g->quadric);
 		g->quadric = NULL;
 	}
-	g->radius = 0.0;
+	g->radius = -1.0;
 	if (g->text) {
 		free(g->text);
 		g->text = NULL;
