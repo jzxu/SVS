@@ -12,7 +12,7 @@ int read_socket(char *buf, int n);
 int read_file(char *buf, int n);
 void socket_error(char *msg);
 
-enum Input_type { FILE_INPUT, SOCKET_INPUT };
+enum Input_type { REGULAR_FILE, SOCKET };
 
 static enum Input_type input_type;
 static FILE *file = NULL;
@@ -23,34 +23,33 @@ static int listen_fd, max_fd;
 
 int init_input(int argc, char *argv[]) {
 	int i;
-	
+	char *port = DEF_TCP_PORT;
 	for (i = 1; i < argc; ++i) {
-		if (strcmp(argv[i], "-s") == 0) {
+		if (strcmp(argv[i], "-p") == 0) {
 			if (i + 1 >= argc) {
-				fprintf(stderr, "specify a socket path or port\n");
+				fprintf(stderr, "specify a port\n");
 				return 0;
 			}
-			input_type = SOCKET_INPUT;
-			return init_socket(argv[i + 1]);
+			input_type = SOCKET;
+			port = argv[i+1];
 		} else if (strcmp(argv[i], "-f") == 0) {
 			if (i + 1 >= argc) {
 				fprintf(stderr, "specify file path\n");
 				return 0;
 			}
-			input_type = FILE_INPUT;
+			input_type = REGULAR_FILE;
 			return init_file(argv[i + 1]);
 		}
 	}
-	file = stdin;
-	input_type = FILE_INPUT;
-	return 1;
+	input_type = SOCKET;
+	return init_socket(port);
 }
 
 int get_input(char *buf, int n) {
 	switch (input_type) {
-		case FILE_INPUT:
+		case REGULAR_FILE:
 			return read_file(buf, n);
-		case SOCKET_INPUT:
+		case SOCKET:
 			return read_socket(buf, n);
 	}
 	return 0;
@@ -156,8 +155,11 @@ int read_socket(char *buf, int n) {
 }
 
 int init_file(char *path) {
-	if ((file = fopen(path, "r")) == NULL)
+	if (strcmp(path, "-") == 0) {
+		file = stdin;
+	} else if ((file = fopen(path, "rb")) == NULL) {
 		return 0;
+	}
 	return 1;
 }
 

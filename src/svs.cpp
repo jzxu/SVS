@@ -587,12 +587,14 @@ bool svs::do_cli_command(const vector<string> &args, string &output) {
 }
 
 void svs::cli_connect_viewer(const vector<string> &args, ostream &os) {
+	string port;
 	if (args.empty()) {
-		os << "specify socket path" << endl;
-		return;
+		port = DEF_VIEWER_PORT;
+	} else {
+		port = args[0];
 	}
-	if (draw->connect(args[0])) {
-		os << "connection successful" << endl;
+	if (draw->connect(port)) {
+		os << "connected on port " << port << endl;
 		for (int i = 0, iend = state_stack.size(); i < iend; ++i) {
 			state_stack[i]->get_scene()->refresh_draw();
 		}

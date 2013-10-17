@@ -70,4 +70,6 @@
 #define RANSAC_MAX_ITERS 100
 #define RANSAC_LOG_ALARM_RATE -2.995732273553991  // log(0.05)
 
+#define DEF_VIEWER_PORT "20195"
+
 #endif

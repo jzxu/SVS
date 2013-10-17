@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <GL/glfw.h>
 
+#define DEF_TCP_PORT "20195"
 #define PAN_FACTOR  1.0e-1
 #define GRID_LINES  10
 #define MAX_COMMAND 4096

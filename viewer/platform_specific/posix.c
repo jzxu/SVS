@@ -30,6 +30,7 @@ enum Input_type { REGULAR_FILE, SOCKET };
 
 static enum Input_type input_type;
 static FILE *file = NULL;
+static char *socket_path = NULL;
 
 /* persistent vars for socket */
 static fd_set all_fds;
@@ -37,15 +38,15 @@ static int listen_fd, max_fd;
 
 int init_input(int argc, char *argv[]) {
 	int i;
-	
+	char *port_or_path = DEF_TCP_PORT;
 	for (i = 1; i < argc; ++i) {
-		if (strcmp(argv[i], "-s") == 0) {
+		if (strcmp(argv[i], "-p") == 0) {
 			if (i + 1 >= argc) {
 				fprintf(stderr, "specify a socket path or port\n");
 				return 0;
 			}
+			port_or_path = argv[i+1];
 			input_type = SOCKET;
-			return init_socket(argv[i + 1]);
 		} else if (strcmp(argv[i], "-f") == 0) {
 			if (i + 1 >= argc) {
 				fprintf(stderr, "specify file path\n");
@@ -55,9 +56,8 @@ int init_input(int argc, char *argv[]) {
 			return init_file(argv[i + 1]);
 		}
 	}
-	file = stdin;
-	input_type = REGULAR_FILE;
-	return 1;
+	input_type = SOCKET;
+	return init_socket(port_or_path);
 }
 
 int get_input(char *buf, int n) {
@@ -82,6 +82,12 @@ int read_file(char *buf, int n) {
 	return strlen(buf);
 }
 
+void cleanup_socket_file() {
+	if (socket_path) {
+		unlink(socket_path);
+	}
+}
+
 int init_socket(char *path_or_port) {
 	int family, port, yes;
 	struct sockaddr_in in_name;
@@ -97,9 +103,12 @@ int init_socket(char *path_or_port) {
 		name = (struct sockaddr*) &in_name;
 		name_size = sizeof(in_name);
 	} else {
+		socket_path = strdup(path_or_port);
+		atexit(cleanup_socket_file);
+		unlink(socket_path);
 		memset(&un_name, 0, sizeof(un_name));
 		family = un_name.sun_family = AF_UNIX;
-		strncpy(un_name.sun_path, path_or_port, sizeof(un_name.sun_path));
+		strncpy(un_name.sun_path, socket_path, sizeof(un_name.sun_path));
 		name = (struct sockaddr*) &un_name;
 		name_size = sizeof(un_name);
 	}
@@ -174,8 +183,11 @@ int read_socket(char *buf, int n) {
 }
 
 int init_file(char *path) {
-	if ((file = fopen(path, "r")) == NULL)
+	if (strcmp(path, "-") == 0) {
+		file = stdin;
+	} else if ((file = fopen(path, "r")) == NULL) {
 		return 0;
+	}
 	return 1;
 }
 
