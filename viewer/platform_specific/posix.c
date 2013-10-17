@@ -11,6 +11,10 @@
 #include <unistd.h>
 #include <time.h>
 
+/* for font stuff */
+#include <X11/Intrinsic.h>
+#include <GL/glx.h>
+
 #include "viewer.h"
 
 int init_socket(char *path);
@@ -194,4 +198,39 @@ char *get_temp(const char *prefix) {
 
 void delete_file(const char *path) {
 	remove(path);
+}
+
+GLuint get_font_display_list()
+{
+	char *fontname;
+	static GLuint base = 0;
+	int first, last;
+	Display *disp;
+	XFontStruct *font;
+
+	if (glIsList(base)) {
+		return base;
+	}
+	base = glGenLists(256);
+	if (!glIsList(base)) {
+		error("Cannot initialize font list");
+	}
+
+	disp = XOpenDisplay(0);
+	if (disp == 0) {
+		error("Cannot open X11 display");
+	}
+	fontname = getenv("SVS_FONT");
+	if (fontname == NULL) {
+		fontname = "-*-fixed-bold-*-normal-*-15-*-*-*-*-*-iso8859-*";
+	}
+	font = XLoadQueryFont(disp, fontname);
+	if (!font) {
+		error("Cannot load font");
+	}
+	first = font->min_char_or_byte2;
+	last = font->max_char_or_byte2;
+	glXUseXFont(font->fid, first, last - first + 1, base + first);
+	XCloseDisplay(disp);
+	return base;
 }

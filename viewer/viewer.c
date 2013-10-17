@@ -59,6 +59,7 @@ void init_grid(void);
 void draw_grid(void);
 void draw_screen(void);
 void draw_layer(scene *s, int layer_num);
+void draw_text(char *s, int x, int y);
 void draw_labels(void);
 void draw_scene_buttons(GLuint x, GLuint y);
 int scene_button_hit_test(GLuint x0, GLuint y0, GLuint x, GLuint y);
@@ -122,7 +123,6 @@ int main(int argc, char *argv[]) {
 	glMaterialfv(GL_FRONT, GL_SHININESS, geom_shininess);
 	
 	init_grid();
-	init_font();
 	init_layers();
 	
 	input_thread = glfwCreateThread(proc_input, NULL);
@@ -947,3 +947,13 @@ void set_redraw() {
 	redraw = 1;
 	glfwUnlockMutex(redraw_lock);
 }
+
+void draw_text(char *s, int x, int y) {
+	GLuint base = get_font_display_list();
+	glRasterPos2i(x, y);
+	glPushAttrib (GL_LIST_BIT);
+	glListBase(base);
+	glCallLists(strlen(s), GL_UNSIGNED_BYTE, (GLubyte *) s);
+	glPopAttrib ();
+}
+

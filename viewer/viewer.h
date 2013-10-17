@@ -126,10 +126,6 @@ void set_redraw();
 /* input.c */
 void GLFWCALL proc_input(void *unused);
 
-/* text.c */
-void init_font(void);
-void draw_text(char *s, int x, int y);
-
 /* util.c */
 void error(const char *msg);
 int match(char *pattern, char *s);
@@ -162,5 +158,6 @@ int get_input(char *buf, int n);
 int run_shell(const char *cmd);
 char *get_temp(const char *prefix);
 void delete_file(const char *path);
+GLuint get_font_display_list();
 
 #endif
