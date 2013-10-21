@@ -79,11 +79,7 @@ int proc_cmd(char *fields[]) {
 	if (!fields[0]) {
 		return 1;
 	} else if (strcmp(fields[0], "save") == 0) {
-		if (!fields[1]) {
-			fprintf(stderr, "specify save path\n");
-			return 0;
-		}
-		request_screenshot(fields[1], 1);
+		request_screenshot();
 		wait_for_redraw = 1;
 		return 1;
 	} else if (strcmp(fields[0], "layer") == 0) {

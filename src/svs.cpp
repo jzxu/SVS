@@ -512,10 +512,7 @@ void svs::input_callback() {
 	}
 
 	if (record_movie) {
-		static int frame = 0;
-		stringstream ss;
-		ss << "save screen" << setfill('0') << setw(4) << frame++ << ".ppm";
-		draw->send(ss.str());
+		draw->send("save\n");
 	}
 }
 

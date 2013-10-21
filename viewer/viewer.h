@@ -112,7 +112,7 @@ int delete_scenes(char *pattern);
 int match_scenes(char *pattern, scene **scns, int n);
 void init_scene(scene *s, char *name);
 void destroy_scene(scene *s);
-void request_screenshot(char *path, int i);  /* 0 = from keyboard, 1 = from input */
+void request_screenshot();
 
 geometry *find_or_add_geom(scene *s, char *name);
 int delete_geoms(scene *s, char *pattern);

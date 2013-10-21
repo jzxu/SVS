@@ -46,12 +46,7 @@ static int scr_height = 480;
 static int show_grid = 1;
 static real grid_size = 1.0;
 static int redraw = 0;
-
-/*
- 0 = screenshots requested by keyboard
- 1 = screenshots requested by input
-*/
-static char screenshot_path[2][1000] = { { '\0' }, { '\0' } };
+static int take_screenshot = 0;
 
 void reshape ();
 void calc_normals(geometry *g);
@@ -66,7 +61,7 @@ int scene_button_hit_test(GLuint x0, GLuint y0, GLuint x, GLuint y);
 void free_geom_shape(geometry *g);
 void setup3d();
 void init_layers();
-void screenshot(char *path);
+void screenshot();
 
 void GLFWCALL keyboard_callback(int key, int state);
 void GLFWCALL mouse_button_callback(int button, int state);
@@ -175,7 +170,7 @@ void GLFWCALL keyboard_callback(int key, int state) {
 			layers[0].wireframe = !layers[0].wireframe;
 			break;
 		case 'S':
-			request_screenshot("screen.ppm", 0);
+			screenshot();
 			break;
 		case 'O':
 			cam.ortho = 1 - cam.ortho;
@@ -314,13 +309,10 @@ void draw_screen() {
 	draw_scene_buttons(SCENE_MENU_OFFSET, scr_height - SCENE_MENU_OFFSET);
 	
 	glFinish();
-	for (i = 0; i < 2; ++i) {
-		if (screenshot_path[i][0] != '\0') {
-			screenshot(screenshot_path[i]);
-			screenshot_path[i][0] = '\0';
-			if (i == 1)
-				semaphore_V(&redraw_semaphore);
-		}
+	if (take_screenshot) {
+		screenshot();
+		semaphore_V(&redraw_semaphore);
+		take_screenshot = 0;
 	}
 	redraw = 0;
 	glfwUnlockMutex(scene_lock);
@@ -863,11 +855,15 @@ void draw_scene_buttons(GLuint x, GLuint y) {
 	}
 }
 
-void screenshot(char *path) {
+void screenshot() {
+	static int screenshot_num = 0;
+
+	char path[20];
 	FILE *out;
 	unsigned char *pixels;
 	int i, j, k;
 	
+	sprintf(path, "screen%06d.ppm", screenshot_num++);
 	pixels = calloc(3 * scr_width * scr_height, sizeof(unsigned char));
 	if (!pixels) {
 		error("out of memory");
@@ -893,8 +889,8 @@ void screenshot(char *path) {
 	fprintf(stderr, "screen shot saved to %s\n", path);
 }
 
-void request_screenshot(char *path, int i) {
-	strncpy(screenshot_path[i], path, sizeof(screenshot_path[i]));
+void request_screenshot() {
+	take_screenshot = 1;
 }
 
 void init_layers() {
