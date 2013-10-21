@@ -33,8 +33,8 @@ int get_tcp_socket(const string &port_or_path) {
 		name_size = sizeof(un_name);
 	}
 	if ((fd = socket(family, SOCK_STREAM, 0)) == -1) {
-		perror("get_socket");
-		exit(1);
+		perror("get_tcp_socket");
+		return -1;
 	}
 	if (connect(fd, name, name_size) == -1) {
 		perror("get_socket");

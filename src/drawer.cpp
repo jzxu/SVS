@@ -118,7 +118,9 @@ void drawer::delete_scene(const string &scn) {
 	if (!connected)
 		return;
 	
-	send(string("-") + scn + "\n");
+	stringstream ss;
+	ss << "\n-" << scn << "\n";
+	send(ss.str());
 }
 
 void drawer::send(const string &s) {

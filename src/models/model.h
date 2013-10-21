@@ -63,6 +63,10 @@ public:
 	
 	int size() const { return insts.size(); }
 
+	void get_types(int i, std::vector<std::string> &t) const {
+		t = types[i];
+	}
+
 private:
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	

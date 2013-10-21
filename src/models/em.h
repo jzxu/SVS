@@ -61,6 +61,7 @@ public:
 	void set_noise_var(double v) { noise_var = v; }
 	
 	int num_modes() const { return modes.size(); }
+	int mode_size(int i) const { return modes[i]->size(); }
 	
 	void get_mode_function_string(int m, std::string &s) const;
 

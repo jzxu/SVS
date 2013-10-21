@@ -2,6 +2,7 @@
 #include <vector>
 #include <sstream>
 #include <fstream>
+#include <cmath>
 #include "model.h"
 #include "em.h"
 #include "filter_table.h"
@@ -28,7 +29,59 @@ void error_color(double error, double color[]) {
 	}
 }
 
-void draw_predictions(drawer *d, int mode, int nmodes, double pred, double real, const string &name, EM *em) {
+void draw_modes(drawer *d, EM *em, const string &name) {
+	const int mode_text_x = 50;
+	const int xmode_text_y = 470;
+	const int zmode_text_y = 410;
+	const int font_size = 14;
+
+	static int xnmodes = 0, znmodes = 0;
+	static bool init = true;
+
+	stringstream ss;
+	int y, old_nmodes, nmodes;
+	nmodes = em->num_modes();
+	if (name == "b1:vx") {
+		old_nmodes = xnmodes;
+		xnmodes = nmodes;
+		y = xmode_text_y;
+	} else {
+		old_nmodes = znmodes;
+		znmodes = nmodes;
+		y = zmode_text_y;
+	}
+
+	if (init) {
+		/*
+		ss << "layer 2 l 0 n 0 f 1\n"
+		   << "* +b1:vx_mode_header t b1:vx l 2 c 1 1 1 p " << mode_text_x << " " << xmode_text_y << " 0\n"
+		   << "* +b1:vz_mode_header t b1:vz l 2 c 1 1 1 p " << mode_text_x << " " << zmode_text_y << " 0\n";
+		*/
+		ss << "layer 2 l 0 n 0 f 1\n";
+		init = false;
+	}
+
+	/* draw mode text */
+	for (int i = 0; i < nmodes; ++i) {
+		stringstream ss1;
+		string t;
+		em->get_mode_function_string(i, t);
+		ss1 << setw(6) << em->mode_size(i) << " " << t;
+		y -= font_size;
+		ss << "* +" << name << "_mode_" << i
+		   << " t \"" << ss1.str() << "\""
+		   << " c 1 1 1 p " << mode_text_x + font_size * 4 << " " << y << " 0 l 2\n";
+	}
+	
+	for (int i = nmodes; i < old_nmodes; ++i) {
+		ss << "* -" << name << "_mode_" << i << "\n";
+	}
+	
+	d->send(ss.str());
+}
+
+void draw_predictions(drawer *d, int mode, double pred, double real, const string &name, EM *em) {
+	const double stretch = 20.0;
 	static double mode_colors[][3] = {
 		{ 0.0, 0.0, 0.0 },
 		{ 1.0, 0.0, 1.0 },
@@ -38,24 +91,14 @@ void draw_predictions(drawer *d, int mode, int nmodes, double pred, double real,
 		{ 0.5, 0.0, 0.5 },
 	};
 	static int ncolors = sizeof(mode_colors) / sizeof(mode_colors[0]);
-
-	const double stretch = 20.0;
-	const int mode_text_x = 50;
-	const int xmode_text_y = 460;
-	const int zmode_text_y = 410;
-	const int font_size = 12;
-	
 	static double vx = NAN, vz = NAN, vxerror, vzerror;
-	static int xmode = 0, zmode = 0, xnmodes = 0, znmodes = 0;
 	static bool init = true;
-	
+	static int xmode = 0, zmode = 0;
+
 	stringstream ss;
 	
 	if (init) {
 		ss << "layer 1 l 0 n 0\n"
-		   << "layer 2 l 0 n 0 f 1\n"
-		   << "* +b1:vx_mode_header t b1:vx l 2 c 1 1 1 p " << mode_text_x << " " << xmode_text_y << " 0\n"
-		   << "* +b1:vz_mode_header t b1:vz l 2 c 1 1 1 p " << mode_text_x << " " << zmode_text_y << " 0\n"
 		   << "* +vx_pred_line l 1 w 2\n"
 		   << "* +vz_pred_line l 1 w 2\n"
 		   << "* +pred_line    l 1 w 2\n";
@@ -63,39 +106,19 @@ void draw_predictions(drawer *d, int mode, int nmodes, double pred, double real,
 		init = false;
 	}
 
-	int old_nmodes = 0, old_mode = 0, y = 0;
+	int old_mode = 0;
 	if (name == "b1:vx") {
-		old_nmodes = xnmodes;
 		old_mode = xmode;
-		xnmodes = nmodes;
 		xmode = mode;
-		y = xmode_text_y;
 		vx = pred * stretch;
 		vxerror = abs(real - pred);
 	} else if (name == "b1:vz") {
-		old_nmodes = znmodes;
 		old_mode = zmode;
-		znmodes = nmodes;
 		zmode = mode;
-		y = zmode_text_y;
 		vz = pred * stretch;
 		vzerror = abs(real - pred);
 	}
-	
-	/* draw mode text */
-	for (int i = 0; i < nmodes; ++i) {
-		string t;
-		em->get_mode_function_string(i, t);
-		y -= font_size;
-		ss << "* +" << name << "_mode_" << i
-		   << " t \"" << t << "\""
-		   << " c 1 1 1 p " << mode_text_x + font_size * 4 << " " << y << " 0 l 2\n";
-	}
-	
-	for (int i = nmodes; i < old_nmodes; ++i) {
-		ss << "* -" << name << "_mode_" << i << "\n";
-	}
-	
+
 	/* set color for selected mode */
 	ss << "* " << name << "_mode_" << old_mode << " c 1 1 1\n";
 	ss << "* " << name << "_mode_" << mode << " c 1 1 0\n";
@@ -106,8 +129,8 @@ void draw_predictions(drawer *d, int mode, int nmodes, double pred, double real,
 	error_color(vzerror, cz);
 	error_color(vxerror + vzerror / 2, cp);
 	
-	bool vx_valid = !is_nan(vx);
-	bool vz_valid = !is_nan(vz);
+	bool vx_valid = !isnan(vx);
+	bool vz_valid = !isnan(vz);
 	
 	ss << "* vx_pred_line v 0 0 0 " << (vx_valid ? vx : 1000.0) << " 0 0"
 	   << " i 0 1 c " << cx[0] << " " << cx[1] << " " << cx[2] << "\n";
@@ -151,7 +174,8 @@ public:
 			info["votes"] = vote_trace;
 		}
 		if (mode > 0) {
-			draw_predictions(draw, mode, em.num_modes(), y(0), real_y, get_name(), &em);
+			draw_modes(draw, &em, get_name());
+			draw_predictions(draw, mode, y(0), real_y, get_name(), &em);
 		}
 		return mode > 0;
 	}
@@ -168,6 +192,7 @@ public:
 		assert(get_data().get_last_inst().y.size() == 1);
 		em.add_data(get_data().size() - 1);
 		em.run(MAXITERS);
+		draw_modes(draw, &em, get_name());
 	}
 	
 	void proxy_get_children(map<string, cliproxy*> &c) {

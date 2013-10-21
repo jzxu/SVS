@@ -616,7 +616,7 @@ bool EM::unify_or_add_mode() {
 	loggers->get(LOG_EM) << "unify_or_add_mode: found " << largest.size() << " colinear examples in noise." << endl;
 
 	if (largest.size() < NEW_MODE_THRESH) {
-		check_after = modes[0]->size() + NEW_MODE_THRESH;
+		check_after += (NEW_MODE_THRESH - largest.size());
 		return false;
 	}
 	
