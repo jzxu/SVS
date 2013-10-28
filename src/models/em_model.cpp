@@ -15,6 +15,7 @@
 using namespace std;
 
 const int MAXITERS = 50;
+const bool DRAW = false;
 
 void error_color(double error, double color[]) {
 	double maxerror = 1e-3;
@@ -173,7 +174,7 @@ public:
 			info["mode"] = mode_info;
 			info["votes"] = vote_trace;
 		}
-		if (mode > 0) {
+		if (mode > 0 && DRAW) {
 			draw_modes(draw, &em, get_name());
 			draw_predictions(draw, mode, y(0), real_y, get_name(), &em);
 		}
@@ -192,7 +193,9 @@ public:
 		assert(get_data().get_last_inst().y.size() == 1);
 		em.add_data(get_data().size() - 1);
 		em.run(MAXITERS);
-		draw_modes(draw, &em, get_name());
+		if (DRAW) {
+			draw_modes(draw, &em, get_name());
+		}
 	}
 	
 	void proxy_get_children(map<string, cliproxy*> &c) {

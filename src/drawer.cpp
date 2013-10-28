@@ -114,7 +114,7 @@ void drawer::change(const string &scn, const sgnode *n, int props) {
 	send(ss.str());
 }
 
-void drawer::delete_scene(const string &scn) {
+void drawer::clear(const string &scn) {
 	if (!connected)
 		return;
 	

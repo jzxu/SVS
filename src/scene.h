@@ -18,7 +18,7 @@ public:
 	scene(const std::string &name, svs *owner);
 	~scene();
 	
-	scene *clone(const std::string &name) const;
+	scene *clone(const std::string &name, bool draw = false) const;
 	
 	group_node   *get_root() { return root; }
 	sgnode       *get_node(const std::string &name);
@@ -108,6 +108,8 @@ private:
 	void cli_relations(const std::vector<std::string> &args, std::ostream &os) const;
 	void cli_draw(const std::vector<std::string> &args, std::ostream &os);
 	void cli_clear(const std::vector<std::string> &args, std::ostream &os);
+
+	void rebuild_typerels();
 };
 
 #endif

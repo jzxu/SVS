@@ -109,7 +109,7 @@ scene::~scene() {
 	delete root;
 }
 
-scene *scene::clone(const string &cname) const {
+scene *scene::clone(const string &cname, bool draw) const {
 	scene *c;
 	string name;
 	std::vector<sgnode*> node_clones;
@@ -124,6 +124,11 @@ scene *scene::clone(const string &cname) const {
 		sgnode *n = node_clones[i];
 		c->find_name(n->get_name())->node = n;
 		n->listen(c);
+	}
+	c->rebuild_typerels();
+	c->draw = draw;
+	if (c->draw) {
+		c->refresh_draw();
 	}
 	return c;
 }
@@ -556,6 +561,7 @@ bool scene::set_properties(const rvec &vals) {
 	const char *types = "prs";
 	vec3 trans;
 	int l = 0;
+	drawer *d = owner->get_drawer();
 	
 	for (int i = 0, iend = nodes.size(); i < iend; ++i) {
 		sgnode *n = nodes[i].node;
@@ -577,6 +583,10 @@ bool scene::set_properties(const rvec &vals) {
 				return false;
 			}
 			n->set_property(j->first, vals(l++));
+		}
+
+		if (draw) {
+			d->change(name, n, drawer::POS | drawer::ROT | drawer::SCALE);
 		}
 	}
 	return true;
@@ -813,7 +823,7 @@ void scene::get_relations(relation_table &rt) const {
 			closest_rel.add(0, closest);
 		} else {
 			// if there's only one real object, then it won't be closest to anything
-			assert(nodes.size() == 2);
+			assert(!track_dists || nodes.size() == 2);
 		}
 	}
 	
@@ -978,7 +988,7 @@ void scene::cli_draw(const vector<string> &args, ostream &os) {
 	if (!old_draw && draw) {
 		refresh_draw();
 	} else if (old_draw && !draw) {
-		owner->get_drawer()->delete_scene(name);
+		owner->get_drawer()->clear(name);
 	}
 }
 
@@ -990,7 +1000,7 @@ void scene::refresh_draw() {
 	if (!draw) return;
 	
 	drawer *d = owner->get_drawer();
-	d->delete_scene(name);
+	d->clear(name);
 	for (int i = 1, iend = nodes.size(); i < iend; ++i) {
 		d->add(name, nodes[i].node);
 	}
@@ -1001,5 +1011,18 @@ void scene::verify_listeners() const {
 		std::list<sgnode_listener*> l;
 		nodes[i].node->get_listeners(l);
 		assert(l.size() == 1 && l.front() == this);
+	}
+}
+
+void scene::rebuild_typerels() {
+	type_rels.clear();
+	for (int i = 0, iend = nodes.size(); i < iend; ++i) {
+		const sgnode *n = nodes[i].node;
+		relation *tr = map_getp(type_rels, n->get_type());
+		if (!tr) {
+			tr = &type_rels[n->get_type()];
+			tr->reset(2);
+		}
+		tr->add(0, n->get_id());
 	}
 }

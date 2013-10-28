@@ -28,7 +28,7 @@ public:
 	void add(const std::string &scn, const sgnode *n);
 	void del(const std::string &scn, const sgnode *n);
 	void change(const std::string &scn, const sgnode *n, int props);
-	void delete_scene(const std::string &scn);
+	void clear(const std::string &scn);
 	void send(const std::string &s);
 	
 private:

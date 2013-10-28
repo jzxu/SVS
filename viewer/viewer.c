@@ -548,7 +548,7 @@ void draw_geom(geometry *g) {
 			}
 			gluQuadricNormals(g->quadric, GLU_SMOOTH);
 		}
-		gluSphere(g->quadric, g->radius, 10, 10);
+		gluSphere(g->quadric, g->radius, 20, 20);
 	} else if (g->text) {
 		draw_text(g->text, 0, 0);
 	} else {
@@ -572,9 +572,8 @@ scene *find_or_add_scene(char *name) {
 		init_scene(s, name);
 		s->next = scene_head;
 		scene_head = s;
-		if (!curr_scene)
-			curr_scene = s;
 	}
+	curr_scene = s;
 	return s;
 }
 

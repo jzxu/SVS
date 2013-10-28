@@ -522,7 +522,7 @@ double geom_convex_dist(const geometry_node *n1, const geometry_node *n2) {
 	CCD_INIT(&ccd);
 	ccd.support1       = geom_ccd_support;
 	ccd.support2       = geom_ccd_support;
-	ccd.max_iterations = 100;
+	ccd.max_iterations = 200;
 	ccd.dist_tolerance = INTERSECT_THRESH;
 	
 	dist = ccdGJKDist(n1, n2, &ccd);

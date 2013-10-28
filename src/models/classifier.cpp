@@ -271,14 +271,14 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 					rvec x1;
 					extract_vec(assign_tuple, x, sig, x1);
 					result = nc->classify(x1);
-					loggers->get(LOG_EM) << "NC votes for " << result << endl;
 					if (result == 0) {
+						loggers->get(LOG_EM) << "NC accepts" << endl;
 						matched_clause = i;
 						used_nc = true;
 						break;
 					}
+					loggers->get(LOG_EM) << "NC rejects" << endl;
 				} else {
-					loggers->get(LOG_EM) << "No NC, voting for 0" << endl;
 					matched_clause = i;
 					used_nc = false;
 					result = 0;
@@ -297,11 +297,11 @@ int binary_classifier::vote(int target, const scene_sig &sig, const relation_tab
 			assign_tuple[1] = sig[target].id;
 			extract_vec(assign_tuple, x, sig, x1);
 			result = neg_nc->classify(x1);
-			loggers->get(LOG_EM) << "No matched clauses, NC votes for " << result << endl;
+			loggers->get(LOG_EM) << "No matched clauses, NC votes" << endl;
 			used_nc = true;
 		} else {
 			// no false negatives in training, so this must be a negative
-			loggers->get(LOG_EM) << "No matched clauses, no NC, vote for 1" << endl;
+			loggers->get(LOG_EM) << "No matched clauses, no NC" << endl;
 			used_nc = false;
 		}
 	}
@@ -621,15 +621,17 @@ void classifier::classify(int target, const scene_sig &sig, const relation_table
 		assert(p.cls_i > 0 && p.cls_j > 0);
 		int clause_index;
 		bool used_nc;
-		loggers->get(LOG_EM) << "VOTE " << p.cls_i << " " << p.cls_j << endl;
+		loggers->get(LOG_EM) << "For modes " << p.cls_i << " " << p.cls_j << endl;
 		int winner = p.clsfr->vote(target, sig, *r, x, clause_index, used_nc);
 		if (p.negated) {
 			winner = 1 - winner;
 		}
 		if (winner == 0) {
 			++votes[p.cls_i];
+			loggers->get(LOG_EM) << "Vote for " << p.cls_i << endl;
 		} else if (winner == 1) {
 			++votes[p.cls_j];
+			loggers->get(LOG_EM) << "Vote for " << p.cls_j << endl;
 		} else {
 			FATAL("illegal winner");
 		}

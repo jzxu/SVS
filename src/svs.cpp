@@ -195,7 +195,7 @@ svs_state::~svs_state() {
 	delete mmdl;
 	
 	if (scn) {
-		svsp->get_drawer()->delete_scene(scn->get_name());
+		svsp->get_drawer()->clear(scn->get_name());
 		delete scn; // results in root being deleted also
 	}
 }
