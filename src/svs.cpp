@@ -381,6 +381,8 @@ void svs_state::proxy_get_children(map<string, cliproxy*> &c) {
 	}
 	
 	c["command"] = cmds;
+
+	c["rollout"] = new memfunc_proxy<svs_state>(this, &svs_state::rollout);
 }
 
 // add ability to set it?
@@ -667,3 +669,61 @@ void svs::cli_add_model(const vector<string> &args, ostream &os) {
 		os << "Cannot create model. Either no such type or name already in use." << endl;
 	}
 }
+
+void svs_state::rollout(const vector<string> &args, ostream &os) {
+	int steps, draw = 0;
+	if (args.size() != 2) {
+		os << "STEPS DRAW" << endl;
+		return;
+	}
+	if (!parse_int(args[0], steps)) {
+		os << "invalid number of steps" << endl;
+		return;
+	}
+	if (!parse_int(args[1], draw)) {
+		os << "use 0 or 1 for DRAW" << endl;
+		return;
+	}
+
+	int p = os.precision();
+	os.precision(10);
+
+	scene *scncopy = scn->clone("rollout", draw);
+	const scene_sig &sig = scncopy->get_signature();
+	rvec curr_state, next_state;
+	
+	scncopy->refresh_draw();
+	scncopy->get_properties(curr_state);
+	for (int i = 0; i < steps; ++i) {
+		relation_table rels;
+		
+		scncopy->set_properties(curr_state);
+		if (draw) {
+			svsp->get_drawer()->send("save\n");
+		}
+		scncopy->get_relations(rels);
+		next_state = curr_state;
+		if (!mmdl->predict(sig, rels, curr_state, next_state)) {
+			FATAL("multi_step_predict");
+		}
+		curr_state = next_state;
+		
+		// update positions based on velocity
+		for (int j = 0, jend = sig.size(); j < jend; ++j) {
+			const scene_sig::entry &e = sig[j];
+			for (int k = 0, kend = e.props.size(); k < kend; ++k) {
+				if (e.props[k] == "vx") {
+					curr_state(e.start) += curr_state(e.start + k);
+				} else if (e.props[k] == "vz") {
+					curr_state(e.start + 2) += curr_state(e.start + k);
+				}
+			}
+		}
+		for (int j = 0, jend = curr_state.size(); j < jend; ++j) {
+			os << curr_state(j) << " ";
+		}
+		os << endl;
+	}
+	os.precision(p);
+}
+

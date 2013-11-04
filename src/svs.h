@@ -107,6 +107,7 @@ private:
 	
 	void proxy_get_children(std::map<std::string, cliproxy*> &c);
 	void cli_out(const std::vector<std::string> &args, std::ostream &os);
+	void rollout(const std::vector<std::string> &args, std::ostream &os);
 
 	std::string     name;
 	svs            *svsp;
