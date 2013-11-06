@@ -258,7 +258,7 @@ int ransac_sample(const_mat_view X, const_mat_view Y, const vector<int> &diff_co
  want to avoid doing this.
 */
 void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int split, bool check_spurious,
-            vector<int> &subset, mat &coefs, rvec &intercept)
+            vector<int> &subset, rvec &coefs, double &intercept)
 {
 	vector<int> mss, fit_set, nonuniform_cols;
 	mat Xmss, Ymss, Yp, C;
@@ -340,8 +340,8 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 			pick_rows(Y, fit_set, Ysub);
 			if (!check_spurious || !find_spurious_regressors(Xsub, Ysub, noise_var, C)) {
 				subset = fit_set;
-				coefs = C;
-				intercept = inter;
+				coefs = C.col(0);
+				intercept = inter(0);
 				if (subset.size() >= size_thresh) {
 					return;
 				}
@@ -367,6 +367,39 @@ void remove_from_vector(const vector<int> &inds, vector <T> &v) {
 	assert(v.size() - inds.size() == j);
 	v.resize(j);
 }
+
+int flat_coefs_to_roles(const scene_sig &sig, int target, const rvec &coefs, vector<role> &roles) {
+	int n_nonzero = 0;
+	if (coefs.size() == 0) {
+		return 0;
+	}
+
+	roles.resize(1);
+	for (int i = 0; i < sig.size(); ++i) {
+		int start = sig[i].start;
+		int end = start + sig[i].props.size();
+		bool is_role = false;
+		for (int j = start; j < end; ++j) {
+			if (coefs(j) != 0.0) {
+				++n_nonzero;
+				is_role = true;
+			}
+		}
+		if (is_role || i == target) {
+			role r;
+			r.type = sig[i].type;
+			r.properties = sig[i].props;
+			r.coefficients = coefs.segment(start, end - start);
+			if (i == target) {
+				roles[0] = r;
+			} else {
+				roles.push_back(r);
+			}
+		}
+	}
+	return n_nonzero;
+}
+
 
 EM::EM(const model_train_data &data, logger_set *loggers)
 : data(data), loggers(loggers), use_unify(true),
@@ -520,62 +553,155 @@ em_mode *EM::add_mode(bool manual) {
 	return new_mode;
 }
 
-void EM::unify(const em_mode *m, const vector<int> &new_ex, int sig, int target, unify_result &result) const {
+void EM::unify(const em_mode *m, const vector<int> &new_ex, unify_result &result) const {
 	result.success = false;
 	result.num_ex = 0;
 	result.num_uncovered = m->size();
 	result.num_new_covered = 0;
 	result.num_coefs = 0;
+	result.roles.clear();
 
-	if (!m->unifiable(sig, target)) {
+	if (m->is_manual()) {
+		loggers->get(LOG_EM) << "Manual mode not unifiable" << endl;
 		return;
 	}
-	const interval_set &curr_ex = m->get_members();
-	int nrows = curr_ex.size() + new_ex.size();
-	int ncols = data.get_inst(curr_ex.ith(0)).x.size();
-	int thresh = curr_ex.size() + .9 * new_ex.size();
+
+	vector<int> examples = new_ex;
+	m->get_members().dump(examples);
+	if (examples.empty())
+		return;
+	int nrows = examples.size(), ncols = 0;
+	int num_current = m->get_members().size();
+	int thresh = num_current + .9 * new_ex.size();
+
+	map<int, vector<int> > types_to_pos;
+
+	// Find types that occur exactly once in all examples. These can be lined up
+	// unambiguously for linear regression.
+	int first = examples.front();
+	const scene_sig *sig = data.get_inst(first).sig;
+	result.roles.resize(1);
+	for (int i = 0, iend = sig->size(); i < iend; ++i) {
+		int count = 0;
+		string t = sig->at(i).type;
+		for (int j = 0, jend = sig->size(); j < jend; ++j) {
+			if (sig->at(j).type == t) {
+				if (++count > 1) {
+					break;
+				}
+			}
+		}
+		role r;
+		r.type = t;
+		r.properties = sig->at(i).props;
+		if (i == data.get_inst(first).target) {
+			result.roles[0] = r;
+			ncols += r.properties.size();
+		} else if (count == 1) {
+			result.roles.push_back(r);
+			ncols += r.properties.size();
+		}
+	}
+	
+	for (int i = 0, iend = examples.size(); i < iend; ++i) {
+		const model_train_inst &inst = data.get_inst(examples[i]);
+		int ti = inst.types_index;
+		int target = inst.target;
+		const scene_sig *sig = inst.sig;
+
+		if (has(types_to_pos, ti))
+			continue;
+
+		vector<int> sig_pos;
+		sig_pos.push_back(target);
+		assert(sig->at(target).type == result.roles[0].type);
+		for (int j = 1; j < result.roles.size(); ) {
+			int count = 0, pos = -1;
+			for (int k = 0, kend = sig->size(); k < kend; ++k) {
+				if (k != target && sig->at(k).type == result.roles[j].type) {
+					++count;
+					pos = k;
+				}
+			}
+			if (count == 1) {
+				sig_pos.push_back(pos);
+				++j;
+			} else {
+				ncols -= result.roles[j].properties.size();
+				result.roles.erase(result.roles.begin() + j);
+				map<int, vector<int> >::iterator k, kend;
+				for (k = types_to_pos.begin(), kend = types_to_pos.end(); k != kend; ++k) {
+					k->second.erase(k->second.begin() + j);
+				}
+			}
+		}
+		types_to_pos[ti] = sig_pos;
+	}
+	map<int, vector<int> >::iterator i, iend;
+	for (i = types_to_pos.begin(), iend = types_to_pos.end(); i != iend; ++i) {
+		assert(i->second.size() == result.roles.size());
+	}
 
 	mat X(nrows, ncols), Y(nrows, 1);
-
-	interval_set::const_iterator i, iend;
-	int j = 0;
-	for (i = curr_ex.begin(), iend = curr_ex.end(); i != iend; ++i, ++j) {
-		X.row(j) = data.get_inst(*i).x;
-		Y.row(j) = data.get_inst(*i).y;
-	}
-	for (int k = 0, kend = new_ex.size(); k < kend; ++k, ++j) {
-		X.row(j) = data.get_inst(new_ex[k]).x;
-		Y.row(j) = data.get_inst(new_ex[k]).y;
+	for (int i = 0, iend = examples.size(); i < iend; ++i) {
+		const model_train_inst &inst = data.get_inst(examples[i]);
+		const vector<int> &sig_pos = types_to_pos[inst.types_index];
+		int start = 0;
+		for (int j = 0, jend = sig_pos.size(); j < jend; ++j) {
+			int s = inst.sig->at(sig_pos[j]).start;
+			int len = inst.sig->at(sig_pos[j]).props.size();
+			X.row(i).segment(start, len) = inst.x.segment(s, len);
+			start += len;
+		}
+		assert(start == ncols);
+		Y(i, 0) = inst.y(0);
 	}
 
 	vector<int> unified_ex;
-	mat coefs;
-	rvec intercept;
-	ransac(X, Y, noise_var, thresh, curr_ex.size(), false, unified_ex, coefs, intercept);
+	rvec coefs;
+	double intercept;
+	ransac(X, Y, noise_var, thresh, num_current, false, unified_ex, coefs, intercept);
 	if (unified_ex.size() < thresh) {
+		loggers->get(LOG_EM) << "Needed " << thresh << " to unify, got " << unified_ex.size() << endl;
 		return;
 	}
 	
 	result.success = true;
-	result.coefs = coefs.col(0);
-	result.intercept = intercept(0);
+	result.intercept = intercept;
 	result.num_ex = unified_ex.size();
-	result.num_uncovered = curr_ex.size();
+	result.num_uncovered = num_current;
 	result.num_new_covered = 0;
-	for (int k = 0, kend = unified_ex.size(); k < kend; ++k) {
-		if (unified_ex[k] < curr_ex.size()) {
+
+	int start = 0;
+	for (int i = 0; i < result.roles.size(); ) {
+		int l = result.roles[i].properties.size();
+		int n = 0;
+		for (int j = start, jend = start + l; j < jend; ++j) {
+			if (coefs(j) != 0.0) {
+				++n;
+			}
+		}
+		if (n == 0) {
+			result.roles.erase(result.roles.begin() + i);
+		} else {
+			result.roles[i].coefficients = coefs.segment(start, l);
+			result.num_coefs += n;
+			++i;
+		}
+		start += l;
+	}
+	assert(start == coefs.size());
+
+
+	for (int i = 0, iend = unified_ex.size(); i < iend; ++i) {
+		if (unified_ex[i] < num_current) {
 			--result.num_uncovered;
 		} else {
 			++result.num_new_covered;
 		}
 	}
-	result.num_coefs = 0;
-	for (int k = 0, kend = result.coefs.size(); k < kend; ++k) {
-		if (result.coefs(k) != 0.0) {
-			++result.num_coefs;
-		}
-	}
 }
+
 
 bool EM::unify_or_add_mode() {
 	function_timer t(timers.get_or_add("new"));
@@ -586,10 +712,20 @@ bool EM::unify_or_add_mode() {
 	}
 	
 	vector<int> largest;
-	mat coefs(0,1);
-	rvec inter;
+	rvec coefs;
+	double intercept;
+
+	{
+		cout << "Noise by types" << endl;
+		map<int, interval_set>::const_iterator i, iend;
+		for (i = noise_by_types.begin(), iend = noise_by_types.end(); i != iend; ++i) {
+			cout << i->first << " " << i->second.size() << endl;
+		}
+		cout << endl;
+	}
+
 	modes[0]->largest_const_subset(largest);
-	inter = data.get_inst(largest[0]).y; // constant model
+	intercept = data.get_inst(largest[0]).y(0); // constant model
 	if (largest.size() < NEW_MODE_THRESH) {
 		mat X, Y;
 		map<int, interval_set>::const_iterator i, iend;
@@ -600,7 +736,7 @@ bool EM::unify_or_add_mode() {
 			}
 			vector<int> subset;
 			fill_xy(inds, X, Y);
-			ransac(X, Y, noise_var, NEW_MODE_THRESH, 0, true, subset, coefs, inter);
+			ransac(X, Y, noise_var, NEW_MODE_THRESH, 0, true, subset, coefs, intercept);
 			if (subset.size() > largest.size()) {
 				largest.clear();
 				for (int i = 0; i < subset.size(); ++i) {
@@ -640,18 +776,26 @@ bool EM::unify_or_add_mode() {
 		int best_mode = 0;
 		for (int i = 1, iend = modes.size(); i < iend; ++i) {
 			unify_result r;
-			unify(modes[i], largest, seed_sig, seed_target, r);
+
+			loggers->get(LOG_EM) << "Trying to unify with mode " << i << endl;
+			unify(modes[i], largest, r);
 			if (r.success) {
 				loggers->get(LOG_EM) << "Successfully unified with mode " << i << endl;
 				if (best_mode == 0 || r.num_coefs < best_result.num_coefs) {
 					best_mode = i;
 					best_result = r;
 				}
+			} else {
+				loggers->get(LOG_EM) << "Failed to unify with mode " << i << endl;
 			}
 		}
 		if (best_mode > 0) {
-			loggers->get(LOG_EM) << "Unifying with mode " << best_mode << endl;
-			modes[best_mode]->set_params(*data.get_sig(seed_sig), seed_target, best_result.coefs, best_result.intercept);
+			loggers->get(LOG_EM) << "New roles:" << endl;
+			for (int j = 0, jend = best_result.roles.size(); j < jend; ++j) {
+				loggers->get(LOG_EM) << best_result.roles[j].type << ": " << best_result.roles[j].coefficients << endl;
+			}
+			loggers->get(LOG_EM) << "intercept: " << best_result.intercept << endl;
+			modes[best_mode]->set_roles(best_result.roles, best_result.intercept);
 			return true;
 		}
 		loggers->get(LOG_EM) << "Failed to unify with any modes" << endl;
@@ -659,13 +803,16 @@ bool EM::unify_or_add_mode() {
 	
 	em_mode *new_mode = add_mode(false);
 	const model_train_inst &d0 = data.get_inst(largest[0]);
-	new_mode->set_params(*d0.sig, d0.target, coefs.col(0), inter(0));
+
+	vector<role> roles;
+	flat_coefs_to_roles(*d0.sig, d0.target, coefs, roles);
+	new_mode->set_roles(roles, intercept);
 
 	loggers->get(LOG_EM) << "Adding new mode " << modes.size() - 1 << endl << "coefs =";
-	for (int i = 0; i < coefs.rows(); ++i) {
-		loggers->get(LOG_EM) << " " << coefs(i, 0);
+	for (int i = 0; i < coefs.size(); ++i) {
+		loggers->get(LOG_EM) << " " << coefs(i);
 	}
-	loggers->get(LOG_EM) << endl;
+	loggers->get(LOG_EM) << endl << "intercept = " << intercept << endl;
 	return true;
 }
 
@@ -720,6 +867,7 @@ bool EM::remove_modes() {
 			i++;
 		} else {
 			loggers->get(LOG_EM) << "Mode " << j << " only has " << modes[j]->size() << " examples, removing" << endl;
+			wait_for_gdb();
 			index_map[j] = 0;
 			delete modes[j];
 			removed.push_back(j);
@@ -840,7 +988,9 @@ void EM::cli_add_mode(const vector<string> &args, ostream &os) {
 	}
 	
 	em_mode *new_mode = add_mode(true);
-	new_mode->set_params(*inst.sig, inst.target, coefs, intercept);
+	vector<role> roles;
+	flat_coefs_to_roles(*inst.sig, inst.target, coefs, roles);
+	new_mode->set_roles(roles, intercept);
 }
 
 void EM::cli_update_classifiers(ostream &os) {

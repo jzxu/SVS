@@ -13,6 +13,17 @@
 
 class logger_set;
 
+class role : public serializable {
+public:
+	std::string type;
+	std::vector<std::string> properties;
+	rvec coefficients;
+	FOIL_result classifier;
+
+	void serialize(std::ostream &os) const;
+	void unserialize(std::istream &is);
+};
+
 class em_mode : public serializable, public cliproxy {
 public:
 	em_mode(bool noise, bool manual, const model_train_data &data, logger_set *loggers);
@@ -27,8 +38,7 @@ public:
 	double calc_error(int target, const scene_sig &sig, const rvec &x, double y, double noise_var, std::vector<int> &best_assign) const;
 	bool update_fits(double noise_var);
 	
-	void set_params(const scene_sig &dsig, int target, const rvec &coefs, double inter);
-	bool unifiable(int sig, int target) const;
+	void set_roles(const std::vector<role> &roles, double intercept);
 
 	const interval_set &get_members() const { return members; }
 	int size() const { return members.size(); }
@@ -67,22 +77,12 @@ private:
 	};
 	std::vector<role_map_entry> role_maps;
 	
-	bool stale, noise, new_fit, manual;
+	bool stale, noise, manual, new_fit;
 	mutable bool role_classifiers_stale;
 	const model_train_data &data;
 	double intercept;
 	int n_nonzero;
 
-	class role : public serializable {
-	public:
-		std::string type;
-		std::vector<std::string> properties;
-		rvec coefficients;
-		FOIL_result classifier;
-
-		void serialize(std::ostream &os) const;
-		void unserialize(std::istream &is);
-	};
 
 	std::vector<role> roles;
 	

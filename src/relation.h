@@ -103,6 +103,7 @@ public:
 	
 	bool contains(int x) const;
 	int  ith(int i) const;
+	void dump(std::vector<int> &members) const;
 	
 	int  size() const                        { return sz; }
 	bool empty() const                       { return curr->empty(); }

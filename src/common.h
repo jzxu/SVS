@@ -221,7 +221,6 @@ inline int sign(double x) {
 	}
 }
 
-
 class table_printer {
 public:
 	table_printer();
@@ -289,5 +288,7 @@ private:
 	std::map<int, int> alignments;
 	int spacer_width;
 };
+
+void wait_for_gdb();
 
 #endif

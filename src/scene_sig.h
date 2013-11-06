@@ -36,8 +36,10 @@ public:
 
 	scene_sig() {}
 	
-	entry &operator[](int i)                    { return s.at(i); }
-	const entry &operator[](int i) const        { return s.at(i); }
+	entry &operator[](int i)                    { return s[i]; }
+	const entry &operator[](int i) const        { return s[i]; }
+	entry &at(int i)                            { return s.at(i); }
+	const entry &at(int i) const                { return s.at(i); }
 	int size() const                            { return s.size(); } 
 	bool empty() const                          { return s.empty(); } 
 	void clear()                                { s.clear(); }

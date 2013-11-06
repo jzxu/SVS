@@ -7,6 +7,7 @@
 #include <cassert>
 #include "common.h"
 #include "soar_rand.h"
+#include "unistd.h"
 
 using namespace std;
 
@@ -232,3 +233,13 @@ void table_printer::print(ostream &os) const {
 		os << endl;
 	}
 }
+
+void wait_for_gdb() {
+	volatile bool wait = true;
+	int pid = getpid();
+	cerr << "Process " << pid << " waiting for gdb" << endl;
+	while (wait) {
+		sleep(1);
+	}
+}
+

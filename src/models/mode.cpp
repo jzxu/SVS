@@ -88,50 +88,21 @@ em_mode::em_mode(bool noise, bool manual, const model_train_data &data, logger_s
 	
 }
 
-void em_mode::set_params(const scene_sig &dsig, int target, const rvec &coefs, double inter) {
+void em_mode::set_roles(const std::vector<role> &roles, double intercept) {
 	n_nonzero = 0;
-	intercept = inter;
-	roles.clear();
-	if (coefs.size() > 0) {
-		vector<int> role_map;
-		role target_role;
-		target_role.type = dsig[target].type;
-		target_role.properties = dsig[target].props;
-		target_role.coefficients = coefs.segment(dsig[target].start, dsig[target].props.size());
-		roles.push_back(target_role);
-		role_map.push_back(target);
-		for (int i = 0; i < dsig.size(); ++i) {
-			if (i == target) {
-				continue;
+	this->intercept = intercept;
+	this->roles = roles;
+	for (int i = 0, iend = roles.size(); i < iend; ++i) {
+		const rvec &c = roles[i].coefficients;
+		for (int j = 0, jend = c.size(); j < jend; ++j) {
+			if (c(j) != 0.0) {
+				++n_nonzero;
 			}
-			int start = dsig[i].start;
-			int end = start + dsig[i].props.size();
-			bool is_role = false;
-			for (int j = start; j < end; ++j) {
-				if (coefs(j) != 0.0) {
-					++n_nonzero;
-					is_role = true;
-				}
-			}
-			if (is_role) {
-				role r;
-				r.type = dsig[i].type;
-				r.properties = dsig[i].props;
-				r.coefficients = coefs.segment(start, end - start);
-				roles.push_back(r);
-				role_map.push_back(i);
-			}
-		}
-		
-		if (role_maps.size() == 0) {
-			role_map_entry e;
-			e.role_map = role_map;
-			role_maps.push_back(e);
-		} else {
-			assert(role_maps.size() == 1);        // all existing members must have the same signature
-			role_maps[0].role_map = role_map;
 		}
 	}
+		
+	// clear role maps and wait for the E-step to recalculate them
+	role_maps.clear();
 	new_fit = true;
 	role_classifiers_stale = true;
 }
@@ -413,6 +384,7 @@ bool em_mode::update_fits(double noise_var) {
 			Y.row(j++) = d.y;
 		}
 	}
+	assert(j == members.size());
 	mat coefs;
 	rvec inter;
 	linreg(REGRESSION_ALG, X, Y, cvec(), noise_var, false, coefs, inter);
@@ -521,19 +493,6 @@ void em_mode::largest_const_subset(vector<int> &subset) {
 	}
 }
 
-bool em_mode::unifiable(int sig, int target) const {
-	bool uniform_sig = true;
-	interval_set::const_iterator i, iend;
-	for (i = members.begin(), iend = members.end(); i != iend; ++i) {
-		const model_train_inst &d = data.get_inst(*i);
-		if (d.sig_index != sig || d.target != target) {
-			uniform_sig = false;
-			break;
-		}
-	}
-	return !manual && uniform_sig && role_maps.size() == 1;
-}
-
 int em_mode::get_num_nonzero_coefs() const {
 	if (noise) {
 		return numeric_limits<int>::max();
@@ -598,11 +557,11 @@ void em_mode::role_map_entry::unserialize(istream &is) {
 	unserializer(is) >> role_map >> members;
 }
 
-void em_mode::role::serialize(ostream &os) const {
+void role::serialize(ostream &os) const {
 	serializer(os) << type << properties << coefficients << classifier;
 }
 
-void em_mode::role::unserialize(istream &is) {
+void role::unserialize(istream &is) {
 	unserializer(is) >> type >> properties >> coefficients >> classifier;
 }
 

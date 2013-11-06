@@ -1048,3 +1048,14 @@ void get_context_rels(int target, const relation_table &rels, relation_table &co
 		}
 	}
 }
+
+void interval_set::dump(vector<int> &members) const {
+	members.reserve(members.size() + size());
+	vector<interval>::const_iterator i, iend;
+	for (i = curr->begin(), iend = curr->end(); i != iend; ++i) {
+		for (int j = i->first, jend = i->last; j <= jend; ++j) {
+			members.push_back(j);
+		}
+	}
+}
+

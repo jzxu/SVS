@@ -15,7 +15,7 @@
 using namespace std;
 
 const int MAXITERS = 50;
-const bool DRAW = false;
+const bool DRAW = true;
 
 void error_color(double error, double color[]) {
 	double maxerror = 1e-3;
