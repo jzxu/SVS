@@ -76,6 +76,8 @@ private:
 		void unserialize(std::istream &is);
 	};
 	std::vector<role_map_entry> role_maps;
+
+	std::vector<int> data_role_maps;
 	
 	bool stale, noise, manual, new_fit;
 	mutable bool role_classifiers_stale;
@@ -99,6 +101,8 @@ private:
 	void proxy_use_sub(const std::vector<std::string> &args, std::ostream &os);
 	void cli_clauses(const std::vector<std::string> &args, std::ostream &os) const;
 	void cli_members(std::ostream &os) const;
+	void recalc_role_maps();
+	void set_role_map(int t, const std::vector<int> &rm);
 };
 
 #endif

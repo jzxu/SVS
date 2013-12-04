@@ -88,6 +88,18 @@ em_mode::em_mode(bool noise, bool manual, const model_train_data &data, logger_s
 	
 }
 
+void em_mode::recalc_role_maps() {
+	role_maps.clear();
+
+	interval_set::const_iterator i, iend;
+	for (i = members.begin(), iend = members.end(); i != iend; ++i) {
+		const model_train_inst &inst = data.get_inst(*i);
+		vector<int> rm;
+		calc_error(inst.target, *inst.sig, inst.x, inst.y(0), 1e-15, rm);
+		set_role_map(*i, rm);
+	}
+}
+
 void em_mode::set_roles(const std::vector<role> &roles, double intercept) {
 	n_nonzero = 0;
 	this->intercept = intercept;
@@ -101,8 +113,8 @@ void em_mode::set_roles(const std::vector<role> &roles, double intercept) {
 		}
 	}
 		
-	// clear role maps and wait for the E-step to recalculate them
-	role_maps.clear();
+	// reset role maps
+	recalc_role_maps();
 	new_fit = true;
 	role_classifiers_stale = true;
 }
@@ -425,26 +437,25 @@ double em_mode::predict(const scene_sig &dsig, const rvec &x, const vector<int> 
 	return sum;
 }
 
+void em_mode::set_role_map(int t, const vector<int> &rm) {
+	for (int i = 0, iend = role_maps.size(); i < iend; ++i) {
+		if (role_maps[i].role_map == rm) {
+			role_maps[i].members.insert(t);
+			return;
+		}
+	}
+	role_map_entry e;
+	e.role_map = rm;
+	e.members.insert(t);
+	role_maps.push_back(e);
+}
+
 void em_mode::add_example(int t, const vector<int> &ex_role_map, double noise_var) {
 	assert(!members.contains(t) && ex_role_map.size() == roles.size());
 	
 	const model_train_inst &d = data.get_inst(t);
 	members.insert(t);
-	
-	bool found = false;
-	for (int i = 0, iend = role_maps.size(); i < iend; ++i) {
-		if (role_maps[i].role_map == ex_role_map) {
-			role_maps[i].members.insert(t);
-			found = true;
-			break;
-		}
-	}
-	if (!found) {
-		role_map_entry e;
-		e.role_map = ex_role_map;
-		e.members.insert(t);
-		role_maps.push_back(e);
-	}
+	set_role_map(t, ex_role_map);
 
 	if (noise) {
 		sorted_ys.insert(make_pair(d.y(0), t));

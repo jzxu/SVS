@@ -278,6 +278,7 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 	}
 
 	mss_size = nonuniform_cols.size();
+	mss_size = 6;
 	if (ndata <= mss_size) {
 		split = 0;
 		iters = 1;
@@ -285,6 +286,8 @@ void ransac(const mat &X, const mat &Y, double noise_var, int size_thresh, int s
 		iters = ransac_iters(mss_size, mss_size, ndata);
 	}
 	
+	cerr << "mss_size = " << mss_size << " iterations = " << iters << endl;
+
 	mss.reserve(mss_size);
 	fit_set.reserve(ndata);
 	subset.clear();
@@ -867,7 +870,7 @@ bool EM::remove_modes() {
 			i++;
 		} else {
 			loggers->get(LOG_EM) << "Mode " << j << " only has " << modes[j]->size() << " examples, removing" << endl;
-			wait_for_gdb();
+			//wait_for_gdb();
 			index_map[j] = 0;
 			delete modes[j];
 			removed.push_back(j);
