@@ -39,11 +39,13 @@
 #include "src/filters/vec3.cpp"
 #include "src/filters/monitor_object.cpp"
 
+#include "src/change_tracking_list.cpp"
 #include "src/cliproxy.cpp"
 #include "src/command.cpp"
 #include "src/common.cpp"
 #include "src/drawer.cpp"
 #include "src/filter.cpp"
+#include "src/filter_input.cpp"
 #include "src/filter_table.cpp"
 #include "src/logger.cpp"
 #include "src/mat.cpp"

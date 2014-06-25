@@ -20,13 +20,9 @@ public:
 	node_filter(Symbol *root, soar_interface *si, scene *scn, filter_input *input)
 	: typed_select_filter<const sgnode*>(root, si, input), scn(scn)
 	{
-		enterf("node_filter::node_filter");
-		exitf("node_filter::node_filter");
 	}
 
 	~node_filter() {
-		enterf("node_filter::~node_filter");
-		exitf("node_filter::~node_filter");
 		node_param_map::iterator i;
 		for (i = nodes.begin(); i != nodes.end(); i++){
 			//cout << padd() << "Unlisten " << i->first->get_name() << endl;
@@ -35,7 +31,6 @@ public:
 	}
 	
 	bool compute(const filter_params* params, bool null_out, const sgnode*& out, bool& select, bool& changed){
-		enterf("node_filter::compute");
 		//out = NULL;
 		//changed = false;
 		//select = false;
@@ -75,14 +70,12 @@ public:
 		//cout << padd() << "Change " << (changed ? "T" : "F") << endl;
 		//cout << padd() << "Select " << (select ? "T" : "F") << endl;
 		//cout << padd() << "Node " << (out == NULL ? "NULL" : out->get_name()) << endl;
-		exitf("node_filter::compute");
 
 		return true;
 	}
 	node_param_map nodes;
 
 	void node_update(sgnode* n, sgnode::change_type t, const std::string& update_info){
-		enterf("node_filter::node_update");
 		//cout << padd() << "Change " << t << " on " << n->get_name() << endl;
 		switch(t){
 			case sgnode::SHAPE_CHANGED:
@@ -98,7 +91,6 @@ public:
 				}
 				break;
 		}
-		exitf("node_filter::node_update");
 	}
 
 
