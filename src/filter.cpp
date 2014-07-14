@@ -76,16 +76,9 @@ void filter_output::node_update(sgnode *n, sgnode::change_type t, const std::str
   switch(t){
     case sgnode::TRANSFORM_CHANGED:
     case sgnode::SHAPE_CHANGED:
-      if(track_trans){
-        change(fv);
-      }
-      break;
     case sgnode::PROPERTY_CHANGED:
     case sgnode::PROPERTY_DELETED:
-      if(track_props){
-        change(fv);
-      }
-      break;
+      change(fv);
   }
 }
 

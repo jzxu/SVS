@@ -44,7 +44,7 @@ void filter_input::add_param(string name, filter *in_fltr) {
 }
 
 void filter_input::clear() {
-	result.clear();
+  change_tracking_list<filter_params>::clear();
 	for (int i = 0, iend = input_info.size(); i < iend; ++i) {
 		input_info[i].in_fltr->get_output()->reset();
 	}

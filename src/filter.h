@@ -23,17 +23,6 @@ class filter_output :
   public change_tracking_list<filter_val>, public sgnode_listener
 {
   public:
-    filter_output():
-      track_trans(false), track_props(false){
-    }
-
-    void track_transforms(bool track){
-      track_trans = track;
-    }
-    void track_properties(bool track){
-      track_props = track;
-    }
-
     void node_update(sgnode *n, sgnode::change_type t, const std::string& update_info);
 
     virtual void add(filter_val* v);
@@ -43,9 +32,6 @@ class filter_output :
     virtual void clear();
 
   protected:
-    bool track_trans;
-    bool track_props;
-
     typedef std::map<sgnode*, const filter_val*> node_filter_val_map;
     node_filter_val_map node_map;
 };

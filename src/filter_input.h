@@ -63,8 +63,6 @@ public:
 	
 	typedef std::vector<param_info>        input_table;
 
-  void 
-	
 	virtual ~filter_input();
 	
 	bool update();
@@ -74,12 +72,7 @@ public:
 
   virtual void clear();
 
-protected:
-  bool track_node_trans;
-  bool track_node_props;
-	
 private:
-	
 	input_table input_info;
 };
 

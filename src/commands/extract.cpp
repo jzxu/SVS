@@ -25,6 +25,11 @@ public:
 	}
 	
 	bool update_sub() {
+    if(!once && !first && !svs::get_filter_dirty_bit()){
+      // XXX: Don't update results if the dirty bit is not set
+      return true;
+    }
+
 		if (!res_root) {
 			res_root = si->get_wme_val(si->make_id_wme(root, "result"));
 		}
@@ -43,7 +48,7 @@ public:
 			fltr->listen_for_input(this);
 			first = true;
 		}
-		
+
 		if (fltr && (!once || first)) {
 			if (!fltr->update()) {
 				clear_results();
@@ -68,6 +73,7 @@ public:
 	}
 	
 	void update_results() {
+
 		wme *w;
 		filter_output *out = fltr->get_output();
 		

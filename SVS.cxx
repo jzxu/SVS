@@ -42,6 +42,7 @@
 #include "src/change_tracking_list.cpp"
 #include "src/cliproxy.cpp"
 #include "src/command.cpp"
+#include "src/command_table.cpp"
 #include "src/common.cpp"
 #include "src/drawer.cpp"
 #include "src/filter.cpp"

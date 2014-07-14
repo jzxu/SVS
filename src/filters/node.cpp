@@ -41,6 +41,7 @@ public:
 			return false;
 		}
 
+    //cout << "Node Filter for " << id << endl;
 
 		sgnode* n = scn->get_node(id);
 

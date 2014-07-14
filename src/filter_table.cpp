@@ -308,3 +308,89 @@ void filter_table_entry::proxy_use_sub(const vector<string> &args, ostream &os) 
 	}
 	os << endl;
 }
+/*
+ Example input:
+ 
+ (<ot> ^type on-top ^a <ota> ^b <otb>)
+ (<ota> ^type node ^name box1)
+ (<otb> ^type node ^name box2)
+*/
+filter *parse_filter_spec(soar_interface *si, Symbol *root, scene *scn) {
+	wme_list children, params;
+	wme_list::iterator i;
+	string pname, ftype, itype;
+	filter_input *input;
+	bool fail;
+	filter *f;
+	
+	if (!si->is_identifier(root)) {
+		string strval;
+		long intval;
+		double floatval;
+		
+		if (si->get_val(root, strval)) {
+			return new const_filter<string>(strval);
+		} else if (si->get_val(root, intval)) {
+			return new const_filter<int>(intval);
+		} else if (si->get_val(root, floatval)) {
+			return new const_filter<double>(floatval);
+		}
+		return NULL;
+	}
+	
+	fail = false;
+	si->get_child_wmes(root, children);
+	for (i = children.begin(); i != children.end(); ++i) {
+		if (!si->get_val(si->get_wme_attr(*i), pname)) {
+			continue;
+		}
+		Symbol *cval = si->get_wme_val(*i);
+		if (pname == "type") {
+			if (!si->get_val(cval, ftype)) {
+				return NULL;
+			}
+		} else if (pname == "input-type") {
+			if (!si->get_val(cval, itype)) {
+				return NULL;
+			}
+		} else if (pname != "status" && pname != "result") {
+			params.push_back(*i);
+		}
+	}
+	
+	// The combine type check is a bit of a hack
+	if (itype == "concat" || ftype == "combine") {
+		input = new concat_filter_input();
+	} else if (params.size() == 0) {
+		input = new null_filter_input();
+	} else {
+		input = new product_filter_input();
+	}
+	
+	for (i = params.begin(); i != params.end(); ++i) {
+		if (!si->get_val(si->get_wme_attr(*i), pname)) {
+			continue;
+		}
+		Symbol *cval = si->get_wme_val(*i);
+		filter *cf = parse_filter_spec(si, cval, scn);
+		if (!cf) {
+			fail = true;
+			break;
+		}
+		input->add_param(pname, cf);
+	}
+	
+	if (!fail) {
+		if (ftype == "combine") {
+			f = new passthru_filter(root, si, input);
+		} else {
+			f = get_filter_table().make_filter(ftype, root, si, scn, input);
+		}
+	}
+	
+	if (fail || ftype == "" || f == NULL) {
+		delete input;
+		return NULL;
+	}
+	return f;
+}
