@@ -9,498 +9,45 @@
 #include <iterator>
 
 #include "mat.h"
-#include "sgnode.h"
 #include "common.h"
+#include "change_tracking_list.h"
+
+#include "filter_val.h"
+#include "filter_input.h"
+
+#include "sgnode.h"
 #include "soar_interface.h"
 
-using namespace std;
 
-extern int DEBUG_DEPTH;
-inline std::string padd(){
-	std::stringstream ss;
-	for(int i = 0; i < DEBUG_DEPTH; i++){
-		ss << " ";
-	}
-	return ss.str();
-}
-inline void enterf(const char* name){
-//	std::cout << padd() << "->" << name << std::endl;
- // DEBUG_DEPTH++;
-}
-inline void exitf(const char* name){
-//	DEBUG_DEPTH--;
-//	std::cout << padd() << "<-" << name << std::endl;
-}
+class filter_output : 
+  public change_tracking_list<filter_val>, public sgnode_listener
+{
+  public:
+    void node_update(sgnode *n, sgnode::change_type t, const std::string& update_info);
 
+    virtual void add(filter_val* v);
 
-/*
- Wrapper for all filter value types so we can cache them uniformly.
-*/
-class filter_val {
-public:
-	virtual ~filter_val() {}
-	virtual void get_rep(std::map<std::string,std::string> &rep) const = 0;
-	virtual filter_val *clone() const = 0;
-	virtual filter_val &operator=(const filter_val &rhs) = 0;
-	virtual bool operator==(const filter_val &rhs) const = 0;
-	virtual std::string toString() const = 0;
+    virtual void remove(filter_val* v);
+
+    virtual void clear();
+
+  protected:
+    typedef std::map<sgnode*, const filter_val*> node_filter_val_map;
+    node_filter_val_map node_map;
 };
 
-template <typename T>
-class filter_val_c : public filter_val {  // c for concrete
-public:
-	filter_val_c(const T &v) : v(v) {}
-	virtual ~filter_val_c() {}
-
-	void get_rep(std::map<std::string,std::string> &rep) const {
-		rep.clear();
-		std::stringstream ss;
-		ss << v;
-		rep[""] = ss.str();
-	}
-	
-	filter_val *clone() const {
-		return new filter_val_c<T>(v);
-	}
-	
-	filter_val &operator=(const filter_val &rhs) {
-		const filter_val_c<T> *c = dynamic_cast<const filter_val_c<T>*>(&rhs);
-		assert(c);
-		v = c->v;
-		return *this;
-	}
-	
-	bool operator==(const filter_val &rhs) const {
-		const filter_val_c<T> *c = dynamic_cast<const filter_val_c<T>*>(&rhs);
-		if (!c) {
-			return false;
-		}
-		return v == c->v;
-	}
-	
-	T get_value() const {
-		return v;
-	}
-
-	void set_value(const T &n) {
-		v = n;
-	}
-
-	std::string toString() const {
-		std::stringstream ss;
-		ss << v;
-		return ss.str();
-	}
-
-private:
-	T v;
-};
-
-template <>
-class filter_val_c <const sgnode*> : public filter_val {
-public:
-	filter_val_c(const sgnode *v) : v(v) {}
-	virtual ~filter_val_c() {}
-	
-	void get_rep(std::map<std::string,std::string> &rep) const {
-		rep.clear();
-		//std::cout << "NAME: " << v->get_name() << std::endl;
-		rep[""] = v->get_name();
-	}
-	
-	filter_val *clone() const {
-		return new filter_val_c<const sgnode *>(v);
-	}
-	
-	filter_val &operator=(const filter_val &rhs) {
-		const filter_val_c<const sgnode *> *c = dynamic_cast<const filter_val_c<const sgnode *>*>(&rhs);
-		assert(c);
-		v = c->v;
-		return *this;
-	}
-	
-	bool operator==(const filter_val &rhs) const {
-		const filter_val_c<const sgnode *> *c = dynamic_cast<const filter_val_c<const sgnode *>*>(&rhs);
-		if (!c) {
-			return false;
-		}
-		return v == c->v;
-	}
-	
-	const sgnode *get_value() const {
-		return v;
-	}
-	
-	void set_value(const sgnode *n) {
-		v = n;
-	}
-
-	std::string toString() const {
-		std::stringstream ss;
-		ss << v;
-		return ss.str();
-	}
-
-private:
-	const sgnode *v;
-};
-
-/*
- Convenience functions for getting filter outputs as specific values
- with error checking
- */
-template <class T>
-inline bool get_filter_val (const filter_val *fv, T &v) {
-	const filter_val_c<T> *cast;
-	
-	if (!(cast = dynamic_cast<const filter_val_c<T>*>(fv))) {
-		return false;
-	}
-	v = cast->get_value();
-	return true;
-}
-
-/*
- Specialization for floats to allow getting floats, doubles, and ints
-*/
-template <>
-inline bool get_filter_val<double>(const filter_val *fv, double &v) {
-	const filter_val_c<double> *dfv;
-	const filter_val_c<float> *ffv;
-	const filter_val_c<int> *ifv;
-	
-	if ((dfv = dynamic_cast<const filter_val_c<double>*>(fv))) {
-		v = dfv->get_value();
-		return true;
-	}
-	if ((ffv = dynamic_cast<const filter_val_c<float>*>(fv))) {
-		v = ffv->get_value();
-		return true;
-	}
-	
-	if ((ifv = dynamic_cast<const filter_val_c<int>*>(fv))) {
-		v = ifv->get_value();
-		return true;
-	}
-	
-	return false;
-}
-
-template <class T>
-inline bool set_filter_val (filter_val *fv, const T &v) {
-	filter_val_c<T> *cast;
-	
-	if (!(cast = dynamic_cast<filter_val_c<T>*>(fv))) {
-		return false;
-	}
-	cast->set_value(v);
-	return true;
-}
-
-template<class T>
-class ctlist_listener {
-public:
-	virtual void handle_ctlist_add(const T *e) {}
-	virtual void handle_ctlist_remove(const T *e) {}
-	virtual void handle_ctlist_change(const T *e) {}
-};
-
-/*
- A list that keeps track of changes made to it, so that users can respond
- to only the things that changed. Both the filter output list and filter
- input lists derive from this class. This class also assumes that it owns
- the memory of any element added to it, so it will free that memory when
- items are removed from the list.
-*/
-template<class T>
-class change_tracking_list {
-public:
-	change_tracking_list() : m_added_begin(0) {}
-	
-	~change_tracking_list() {
-		for (int i = 0; i < current.size(); ++i) {
-			delete current[i];
-		}
-		clear_removed();
-	}
-	
-	void add(T* v){ 
-		enterf("change_tracking_list::add");
-		//std::cout << "ADDING FROM CTL: " << v << std::endl;
-		current.push_back(v);
-		for (int i = 0; i < listeners.size(); ++i) {
-			//cout << "CALLING ALL LISTENERS" << endl;
-			listeners[i]->handle_ctlist_add(v);
-		}
-		exitf("change_tracking_list::add");
-	}
-	
-
-	void remove(const T* v) {
-		enterf("change_tracking_list::remove");
-		//std::cout << "REMOVE FROM CTL: " << v << std::endl;
-		bool found = false;
-		for (int i = 0; i < current.size(); ++i) {
-			if (current[i] == v) {
-				removed.push_back(current[i]);
-				current.erase(current.begin() + i);
-				if (i < m_added_begin) {
-					--m_added_begin;
-				}
-				found = true;
-				break;
-			}
-		}
-		assert(found);
-		for (int i = 0; i < changed.size(); ++i) {
-			if (changed[i] == v) {
-				changed.erase(changed.begin() + i);
-				break;
-			}
-		}
-		for (int i = 0; i < listeners.size(); ++i) {
-			//cout << "CTL LISTENER - REMOVE" << endl;
-			listeners[i]->handle_ctlist_remove(v);
-		}
-		exitf("change_tracking_list::remove");
-	}
-	
-	void change(const T *v) {
-		//std::cout << "CHANGE FROM CTL: " << v << std::endl;
-		for(int i = 0; i < current.size(); ++i) {
-			if (current[i] == v) {
-				if (i < m_added_begin &&
-				    find(changed.begin(), changed.end(), current[i]) == changed.end())
-				{
-					changed.push_back(current[i]);
-					for (int i = 0; i < listeners.size(); ++i) {
-						listeners[i]->handle_ctlist_change(current[i]);
-					}
-				}
-				return;
-			}
-		}
-		assert(false);
-	}
-
-	void clear_changes() {
-		//std::cout << "CHANGED CLEARED" << std::endl;
-		m_added_begin = current.size();
-		changed.clear();
-		clear_removed();
-	}
-	
-	/*
-	 This is kind of like the opposite of clear_changes, in that it
-	 makes everything a new addition.
-	*/
-	void reset() {
-		//std::cout << "CHANGE LIST RESET" << std::endl;
-		changed.clear();
-		clear_removed();
-		m_added_begin = 0;
-	}
-	
-	void clear() {
-		//std::cout << "CHANGE LIST CLEAR" << std::endl;
-		// Clear changed list
-		changed.clear();
-
-		// Clear current list
-		m_added_begin = 0;
-		for(int i = 0; i < current.size(); i++){
-			for (int j = 0; j < listeners.size(); ++j) {
-				listeners[j]->handle_ctlist_remove(current[i]);
-			}
-			removed.push_back(current[i]);
-		}
-		current.clear();
-
-		// Clear removed list
-		clear_removed();
-	}
-		
-
-	int num_current() const {
-		return current.size();
-	}
-	
-	int num_changed() const {
-		return changed.size();
-	}
-	
-	int num_removed() const {
-		return removed.size();
-	}
-	
-	T* get_current(int i) {
-		return current[i];
-	}
-	
-	const T* get_current(int i) const {
-		return current[i];
-	}
-	
-	T* get_changed(int i) {
-		return changed[i];
-	}
-	
-	const T* get_changed(int i) const {
-		return changed[i];
-	}
-	
-	T* get_removed(int i) {
-		return removed[i];
-	}
-	
-	const T* get_removed(int i) const {
-		return removed[i];
-	}
-
-	int first_added() const {
-		return m_added_begin;
-	}
-	
-	void listen(ctlist_listener<T> *l) {
-		listeners.push_back(l);
-		//cout << "ADDED LISTENER" << endl;
-	}
-	
-	void unlisten(ctlist_listener<T> *l) {
-		typename std::vector<ctlist_listener<T>*>::iterator i;
-		i = std::find(listeners.begin(), listeners.end(), l);
-		if (i != listeners.end()) {
-			listeners.erase(i);
-		}
-	}
-	
-private:
-	void clear_removed() {
-		for (int i = 0; i < removed.size(); ++i) {
-			delete removed[i];
-		}
-		removed.clear();
-	}
-	
-	std::vector<T*> current;
-	std::vector<T*> removed;
-	std::vector<T*> changed;
-	
-	// Index of the first new element in the current list
-	int m_added_begin;
-	
-	std::vector<ctlist_listener<T>*> listeners;
-};
-
-class filter;
 
 /*
  Every filter generates a list of filter values as output, even if
  the list is empty or a singleton.
 */
-typedef change_tracking_list<filter_val> filter_output;
+//typedef change_tracking_list<filter_val> filter_output;
 
 /*
  A filter parameter set represents one complete input into a filter. It's
  just a list of pairs <parameter name, value>.
 */
 typedef std::vector<std::pair<std::string, filter_val*> > filter_params;
-
-/*
- Each filter takes a number of input parameters. Each of those parameters
- is in the form of an output list. The derived classes of this abstract
- base class are responsible for combining those separate output lists into
- a single list of parameter sets. For example, the output parameter set
- could be the Cartesian product of all elements in each input list.
- 
- I'm assuming that this class owns the memory of the filters that are
- added to it.
-*/
-class filter_input {
-public:
-	struct param_info {
-		std::string name;
-		filter *in_fltr;
-	};
-	
-	typedef std::vector<param_info>        input_table;
-	typedef ctlist_listener<filter_params> listener;
-	
-	virtual ~filter_input();
-	
-	bool update();
-	void add_param(std::string name, filter *f);
-
-	virtual void combine(const input_table &inputs) = 0;
-	
-	void add(filter_params *p)          { result.add(p);    }
-	void remove(const filter_params *p) { result.remove(p); }
-	void change(const filter_params *p) { result.change(p); }
-	void listen(listener *l)            { result.listen(l); }
-	void unlisten(listener *l)          { result.unlisten(l); }
-	
-	int  first_added() const            { return result.first_added(); }
-	int  num_current() const            { return result.num_current(); }
-	int  num_changed() const            { return result.num_changed(); }
-	int  num_removed() const            { return result.num_removed(); }
-
-	const filter_params *get_current(int i) const  { return result.get_current(i); }
-	const filter_params *get_changed(int i) const  { return result.get_changed(i); }
-	const filter_params *get_removed(int i) const  { return result.get_removed(i); }
-	
-	void clear();
-	void reset();
-	void clear_changes();
-	
-private:
-	virtual void reset_sub() {}
-	virtual void clear_sub() {}
-	
-	input_table input_info;
-	change_tracking_list<filter_params> result;
-};
-
-
-class null_filter_input : public filter_input {
-public:
-	void combine(const input_table &inputs) {}
-};
-
-/*
- Input class that just concatenates all separate lists into
- a single parameter set list, with each parameter set being a single
- element.
-*/
-class concat_filter_input : public filter_input {
-public:
-	void combine(const input_table &inputs);
-
-private:
-	void reset_sub();
-	void clear_sub();
-	
-	std::map<filter_val*, filter_params*> val2params;
-};
-
-/*
- Input class that takes the Cartesian product of all input lists.
-*/
-class product_filter_input : public filter_input {
-public:
-	void combine(const input_table &inputs);
-	
-private:
-	void gen_new_combinations(const input_table &inputs);
-	void erase_param_set(filter_params *s);
-	void reset_sub();
-	void clear_sub();
-	
-	typedef std::list<filter_params*> param_set_list;
-	typedef std::map<filter_val*, param_set_list > val2param_map;
-	val2param_map val2params;
-
-	//void printVal2Params()
-};
 
 /*
  The filter is the basic query unit in SVS. Each filter takes a list of
@@ -517,7 +64,9 @@ private:
 */
 class filter {
 public:
+
 	filter(Symbol *root, soar_interface *si, filter_input *in);
+
 	virtual ~filter();
 	
 	void set_status(const std::string &msg);
@@ -539,7 +88,7 @@ public:
 	    return -3;
 	}
 	
-	filter_output *get_output()                        { return &output;     }
+	filter_output* get_output()                        { return &output;     }
 	const filter_input *get_input() const              { return input;       }
 	void listen_for_input(filter_input::listener *l)   { input->listen(l);   }
 	void unlisten_for_input(filter_input::listener *l) { input->unlisten(l); }
@@ -621,32 +170,9 @@ public:
 	virtual void output_removed(const T &out) { }
 	
 private:
-	bool compute(const filter_params *params, filter_val *&out, bool &changed) {
-		bool success;
-		T val;
-		if (out != NULL) {
-			success = get_filter_val(out, val);
-			assert(success);
-		}
-		success = compute(params, out == NULL, val, changed);
-		if (!success) {
-			return false;
-		}
-		if (!out) {
-			out = new filter_val_c<T>(val);
-		} else {
-			success = set_filter_val(out, val);
-			assert(success);
-		}
-		return true;
-	}
+	bool compute(const filter_params *params, filter_val *&out, bool &changed);
 
-	void output_removed(const filter_val *out) {
-		T val;
-		bool success = get_filter_val(out, val);
-		assert(success);
-		output_removed(val);
-	}
+	void output_removed(const filter_val *out);
 };
 
 
@@ -716,52 +242,9 @@ public:
 	virtual void output_removed(const T &out) { }
 
 private:
-	bool compute(const filter_params *params, filter_val *&out, bool &changed) {
-		enterf("select_filter::compute");
-		bool success;
-		bool select;
-		T val;
-		if (out != NULL) {
-			success = get_filter_val(out, val);
-			assert(success);
-		}
-		success = compute(params, (out == NULL), val, select, changed);
-		if (!success) {
-			return false;
-		}
-		if(select && out == NULL){
-			// Create a new filter val
-			out = new filter_val_c<T>(val);
-			changed = true;
-		} else if(select && changed){
-			// The value has changed
-			success = set_filter_val(out, val);
-			assert(success);
-		} else if(!select && out != NULL){
-			// We no longer are selecting the value, make it null
-			out = NULL;
-			changed = true;
-		} else {
-			// the value didn't actually changed
-			// do nothing
-			changed = false;
-		}
-		//cout << padd() << "changed = " << (changed ? "T" : "F") << endl;
-		//cout << padd() << "select = " << (select ? "T" : "F") << endl;
-		//cout << padd() << "null = " << (out == NULL ? "T" : "F") << endl;
-		exitf("select_filter::compute");
-		
-		return true;
-	}
+	bool compute(const filter_params *params, filter_val *&out, bool &changed);
 
-	void output_removed(const filter_val *out) {
-		//cout << "typed_select_filter::output_removed" << endl;
-		T val;
-		bool success = get_filter_val(out, val);
-		assert(success);
-		output_removed(val);
-		delete val;
-	}
+	void output_removed(const filter_val *out);
 };
 
 
@@ -778,50 +261,7 @@ public:
 	
 	virtual ~reduce_filter() {}
 	
-	bool update_outputs() {
-		const filter_input *input = get_input();
-		bool changed = false;
-
-		for (int i = input->first_added(); i < input->num_current(); ++i) {
-			if (!input_added(input->get_current(i))) {
-				return false;
-			}
-			changed = true;
-		}
-		for (int i = 0; i < input->num_changed(); ++i) {
-			if (!input_changed(input->get_changed(i))) {
-				return false;
-			}
-			changed = true;
-		}
-		for (int i = 0; i < input->num_removed(); ++i) {
-			if (!input_removed(input->get_removed(i))) {
-				return false;
-			}
-			changed = true;
-		}
-
-		T new_val = value;
-		if(changed){
-			if(!calculate_value(new_val)){
-				return false;
-			}
-		}
-		
-		if (!output && input->num_current() > 0) {
-			output = new filter_val_c<T>(new_val);
-			add_output(output, NULL);
-		} else if (output && input->num_current() == 0) {
-			remove_output(output);
-			output = NULL;
-		} else if (output && value != new_val) {
-			bool success = set_filter_val(output, new_val);
-			assert(success);
-			change_output(output);
-		}
-		value = new_val;
-		return true;
-	}
+	bool update_outputs();
 	
 private:
 	virtual bool input_added(const filter_params *params) = 0;
@@ -857,13 +297,7 @@ class const_filter : public filter {
 public:
 	const_filter(const T &v) : filter(NULL, NULL, NULL), added(false), v(v) {}
 	
-	bool update_outputs() {
-		if (!added) {
-			add_output(new filter_val_c<T>(v), NULL);
-			added = true;
-		}
-		return true;
-	}
+	bool update_outputs();
 		
 private:
 	T v;

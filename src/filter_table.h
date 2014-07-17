@@ -63,4 +63,6 @@ private:
 /* Get the singleton instance */
 filter_table &get_filter_table();
 
+filter *parse_filter_spec(soar_interface *si, Symbol *root, scene *scn);
+
 #endif

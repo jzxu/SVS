@@ -54,9 +54,4 @@ private:
 	timer_set       timers;
 };
 
-command *make_command(svs_state *state, wme *w);
-
-/* Create a filter from a WM structure. Recursive. */
-filter *parse_filter_spec(soar_interface *si, Symbol *root, scene *scn);
-
 #endif
