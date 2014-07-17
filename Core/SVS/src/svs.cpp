@@ -15,11 +15,27 @@
 #include "common.h"
 #include "model.h"
 #include "filter_table.h"
+#include "command_table.h"
 #include "drawer.h"
 #include "logger.h"
 #include "model.h"
 
 using namespace std;
+
+#include <sys/time.h>
+#include <unistd.h>
+
+long getTime(){
+  struct timeval curTime;
+  gettimeofday(&curTime, NULL);
+  return (curTime.tv_sec % 1000) * 1000000 + curTime.tv_usec;
+}
+
+long recordTime(long startTime, const char* message){
+  long curTime = getTime();
+  cout << message << " = " << (curTime - startTime) << endl;
+  return curTime;
+}
 
 typedef map<string,command*>::iterator cmd_iter;
 
@@ -213,10 +229,10 @@ svs_state::svs_state(Symbol *state, svs_state *parent)
 }
 
 svs_state::~svs_state() {
-	map<string, command*>::iterator i, iend;
+  command_set_it i, iend;
 
 	for (i = curr_cmds.begin(), iend = curr_cmds.end(); i != iend; ++i) {
-		delete i->second;
+		delete i->cmd;
 	}
 
 	delete mmdl;
@@ -268,75 +284,86 @@ void svs_state::update_scene_num() {
 }
 
 void svs_state::update_cmd_results(bool early) {
-	cmd_iter i;
+	command_set_it i;
 	if (early) {
 		set_default_output();
 	}
 	for (i = curr_cmds.begin(); i != curr_cmds.end(); ++i) {
-		if (i->second->early() == early) {
-			i->second->update();
+		if (i->cmd->early() == early) {
+			i->cmd->update();
 		}
 	}
 }
 
-#include <iostream>
-using namespace std;
-
 void svs_state::process_cmds() {
+  long time = getTime();
 	wme_list all;
-	wme_list::iterator all_it;
-	cmd_iter curr_it;
+  wme_list::iterator all_it;
 	si->get_child_wmes(cmd_link, all);
+  
+  // Live Commands - the set of all commands on the command link
+  command_set live_commands;
+  for(all_it = all.begin(); all_it != all.end(); all_it++){
+    // Convert wme val to string
+    Symbol* idSym = si->get_wme_val(*all_it);
+    string cmdId;
+    if(!si->get_name(idSym, cmdId)){
+      // Not an identifier, continue;
+      continue;
+    }
 
-	wme_list new_commands;    // List of new commands
-	vector<string> curr_ids;  // All identifiers on the command wme
-	for(all_it = all.begin(); all_it != all.end(); all_it++){
-		// Convert wme val to string
-		Symbol* idSym = si->get_wme_val(*all_it);
-		string new_id;
-		if(!si->get_name(idSym, new_id)){
-			// Not an identifier, continue;
-			continue;
-		}
-		curr_ids.push_back(new_id);
+    live_commands.insert(command_entry(cmdId, 0, *all_it));
+  }
 
-		// Check if the command is new
-		curr_it = curr_cmds.find(new_id);
-		if(curr_it == curr_cmds.end()){
-			new_commands.push_back(*all_it);
-		}
-	}
+  // Do a diff on the curr_cmds list and the live_commands
+  //   to find which have been added and which have been removed
+  vector<command_set_it> old_commands, new_commands;
+  command_set_it live_it = live_commands.begin();
+  command_set_it curr_it = curr_cmds.begin();
 
-	// Find all commands removed from the svs command wme
-	vector<string> old_commands; 
-	for(curr_it = curr_cmds.begin(); curr_it != curr_cmds.end(); curr_it++){
-		vector<string>::iterator new_it = find(curr_ids.begin(), 
-				curr_ids.end(), curr_it->first);
-		if(new_it == curr_ids.end()){
-			old_commands.push_back(curr_it->first);
-		}
-	}
+  while(live_it != live_commands.end() || curr_it != curr_cmds.end()){
+    if(live_it == live_commands.end()){
+      // No more live commands, rest of current are old
+      old_commands.push_back(curr_it);
+      curr_it++;
+    } else if(curr_it == curr_cmds.end()){
+      // No more current commands, rest of live are new
+      new_commands.push_back(live_it);
+      live_it++;
+    } else if(curr_it->id == live_it->id){
+      // Item is in both live and current list, continue
+      curr_it++;
+      live_it++;
+    } else if(curr_it->id.compare(live_it->id) < 0){
+      // Current Command is not in the live list, add to old
+      old_commands.push_back(curr_it);
+      curr_it++;
+    } else {
+      // Live command is not in the current list, add to new
+      new_commands.push_back(live_it);
+      live_it++;
+    }
+  }
 
-	// Delete the command
-	vector<string>::iterator old_it;
-	for(old_it = old_commands.begin(); old_it != old_commands.end(); old_it++){
-		curr_it = curr_cmds.find(*old_it);
-		delete curr_it->second;
-		curr_cmds.erase(curr_it);
-	}
+  // Delete the old commands
+  vector<command_set_it>::iterator old_it;
+  for(old_it = old_commands.begin(); old_it != old_commands.end(); old_it++){
+    command_set_it old_cmd = *old_it;
+    delete old_cmd->cmd;
+    curr_cmds.erase(old_cmd);
+  }
 
 	// Add the new commands
-	wme_list::iterator new_it;
+  vector<command_set_it>::iterator new_it;
 	for (new_it = new_commands.begin(); new_it != new_commands.end(); new_it++) {
-		command *c = make_command(this, *new_it);
+    command_set_it new_cmd = *new_it;
+		command *c = get_command_table().make_command(this, new_cmd->cmd_wme);
 		if (c) {
-			Symbol* idSym = si->get_wme_val(*new_it);
-			string new_id;
-			si->get_name(idSym, new_id);
-			curr_cmds[new_id] = c;
+      curr_cmds.insert(command_entry(new_cmd->id, c, 0));
+      svs::mark_filter_dirty_bit(); 
 		} else {
 			string attr;
-			si->get_val(si->get_wme_attr(*new_it), attr);
+			si->get_val(si->get_wme_attr(new_cmd->cmd_wme), attr);
 			loggers->get(LOG_ERR) << "could not create command " << attr << endl;
 		}
 	}
@@ -431,9 +458,9 @@ void svs_state::proxy_get_children(map<string, cliproxy*> &c) {
 	c["output"]->set_help("Print current output.");
 
 	proxy_group *cmds = new proxy_group;
-	map<string, command*>::const_iterator i;
+  command_set::const_iterator i;
 	for (i = curr_cmds.begin(); i != curr_cmds.end(); ++i) {
-		cmds->add(i->first, i->second);
+		cmds->add(i->id, i->cmd);
 	}
 
 	c["command"] = cmds;
@@ -464,6 +491,8 @@ svs::svs(agent *a)
 	draw = new drawer();
 	loggers = new logger_set(si);
 }
+
+bool svs::filter_dirty_bit = true;
 
 svs::~svs() {
 	for (int i = 0, iend = state_stack.size(); i < iend; ++i) {
@@ -521,12 +550,14 @@ void svs::proc_input(svs_state *s) {
 			}
 		} else {
 			s->get_scene()->parse_sgel(env_inputs[i]);
+      svs::mark_filter_dirty_bit();
 		}
 	}
 	env_inputs.clear();
 }
 
 void svs::output_callback() {
+  long time = getTime();
 	function_timer t(timers.get_or_add("output"));
 
 	vector<svs_state*>::iterator i;
@@ -536,6 +567,7 @@ void svs::output_callback() {
 	for (i = state_stack.begin(); i != state_stack.end(); ++i) {
 		(**i).process_cmds();
 	}
+
 	for (i = state_stack.begin(); i != state_stack.end(); ++i) {
 		(**i).update_cmd_results(true);
 	}
@@ -554,14 +586,15 @@ void svs::output_callback() {
 }
 
 void svs::input_callback() {
-	function_timer t(timers.get_or_add("input"));
-	
+  long time = getTime();
+
 	svs_state *topstate = state_stack.front();
 	proc_input(topstate);
+
 	if (use_models) {
 		topstate->update_models();
 	}
-	
+
 	vector<svs_state*>::iterator i;
 	for (i = state_stack.begin(); i != state_stack.end(); ++i) {
 		(**i).update_cmd_results(false);
@@ -573,7 +606,10 @@ void svs::input_callback() {
 		ss << "save screen" << setfill('0') << setw(4) << frame++ << ".ppm";
 		draw->send(ss.str());
 	}
+
+  svs::filter_dirty_bit = false;
 }
+
 
 /*
  This is a naive implementation. If this method is called concurrently
